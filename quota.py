@@ -95,7 +95,7 @@ def predict(history):
     week_start = reset_ts - 7 * 86400 if reset_ts else None
     pts = [(h["ts"], h["quota"]["weekly_percentage"]) for h in history
            if h.get("quota", {}).get("weekly_percentage") is not None
-           and (week_start is None or h["ts"] > week_start - 86400)]
+           and (week_start is None or h["ts"] > week_start)]
     out = {"pct": pct, "reset_ts": reset_ts, "samples": len(pts)}
     if len(pts) >= 2 and pct is not None:
         (t0, p0), (t1, p1) = pts[0], pts[-1]

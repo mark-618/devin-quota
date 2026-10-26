@@ -56,6 +56,7 @@ html,body{background:var(--bg);color:var(--text);
 .legend .sw{display:inline-block;width:16px;height:2px;border-radius:2px;vertical-align:3px;margin-right:7px}
 .legend .sw.dash{background:repeating-linear-gradient(90deg,var(--fc) 0 4px,transparent 4px 7px)}
 .legend .sw.dots{background:repeating-linear-gradient(90deg,var(--limit) 0 3px,transparent 3px 6px)}
+.legend .sw.pace{background:repeating-linear-gradient(90deg,#4e4e58 0 4px,transparent 4px 8px)}
 
 .sub-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:14px}
 @media(max-width:760px){.sub-cards{grid-template-columns:repeat(2,1fr)}}
@@ -90,6 +91,7 @@ footer code{background:var(--card2);border-radius:5px;padding:1px 6px;font-size:
       <div class="avg" id="avg">—</div>
       <div class="legend">
         <span><span class="sw" style="background:var(--usage)"></span>Usage</span>
+        <span><span class="sw pace"></span>Even pace</span>
         <span><span class="sw dash"></span>Forecast</span>
         <span><span class="sw dots"></span>Weekly limit</span>
       </div>
@@ -143,7 +145,11 @@ function render(){
   }else{
     paceHtml=`<b class="ok">Collecting samples…</b>`;
   }
-  $("meta").innerHTML=`Weekly usage <i>·</i> Ends ${fmtD(resetT)} <i>·</i> ${paceHtml}`;
+  // vs even pace: delta between actual % and where uniform burn would be now
+  const expPct=(now-weekStart)/(resetT-weekStart)*100;
+  const delta=pct-expPct;
+  const deltaHtml=`<i>·</i> <b class="${delta>0?"":"ok"}">${delta>0?"+":""}${delta.toFixed(1)}% vs even pace</b>`;
+  $("meta").innerHTML=`Weekly usage <i>·</i> Ends ${fmtD(resetT)} <i>·</i> ${paceHtml}${deltaHtml}`;
 
   // ---------- chart ----------
   const c=$("cv"),ctx=c.getContext("2d"),dpr=window.devicePixelRatio||1;
@@ -172,6 +178,18 @@ function render(){
     ctx.beginPath();ctx.moveTo(18,Y(g));ctx.lineTo(W-18,Y(g));ctx.stroke();
     ctx.fillText(g+"%",20,Y(g)-6);
   }
+
+  // even-pace reference diagonal: 0% at week start -> 100% at reset
+  // actual line above this = burning faster than uniform pace; below = under
+  ctx.strokeStyle="#4e4e58";ctx.setLineDash([4,5]);ctx.lineWidth=1.4;
+  ctx.beginPath();ctx.moveTo(X(weekStart),Y(0));ctx.lineTo(X(resetT),Y(100));ctx.stroke();
+  ctx.setLineDash([]);
+
+  // "now" vertical marker
+  ctx.strokeStyle="#3a3a41";ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(X(now),Y(0));ctx.lineTo(X(now),14);ctx.stroke();
+  ctx.fillStyle="#8e8e95";ctx.font=`${10*dpr}px -apple-system`;
+  ctx.fillText("now",X(now)+5,22);
 
   // hatched forecast region (under forecast line, from last point to min(exhaust,reset))
   const lp=pts.at(-1);
