@@ -156,8 +156,12 @@ function render(){
   const W=c.clientWidth*dpr,H=c.clientHeight*dpr; c.width=W;c.height=H;
   ctx.clearRect(0,0,W,H);ctx.lineJoin="round";
 
-  const pts=(state.history||[]).filter(h=>h.quota&&h.quota.weekly_percentage!=null)
+  const pts=(state.history||[]).filter(h=>h.quota&&h.quota.weekly_percentage!=null&&h.ts*1000>weekStart)
     .map(h=>({t:h.ts*1000,v:h.quota.weekly_percentage}));
+  // quota is 0 at week start — anchor the usage line there so flat/staircase
+  // segments read correctly across the whole window
+  if(!pts.length) pts.push({t:now,v:pct});
+  pts.unshift({t:weekStart,v:0});
 
   // forecast target
   const hasRate=p.rate_per_hour!=null&&p.rate_per_hour>0;
@@ -267,14 +271,13 @@ function render(){
 
   // ---------- footer + minis ----------
   const rate=p.rate_per_day;
-  const src=p.rate_source==="pace"?" (pace est.)":"";
-  $("avg").innerHTML=rate!=null?`Averaging <b>${rate.toFixed(1)}%</b> a day${src}`:`样本 ${p.samples??0} · 每小时自动记录`;
+  $("avg").innerHTML=rate!=null?`Averaging <b>${rate.toFixed(1)}%</b> a day (week-to-date)`:`样本 ${p.samples??0} · 每小时自动记录`;
   $("mRemain").innerHTML=`${(100-pct).toFixed(0)}<small>%</small>`;
   $("mRemainS").textContent="weekly quota left";
   $("mReset").innerHTML=fmtDur(resetT-now);
   $("mResetS").textContent="until "+fmtD(resetT)+" reset";
   $("mRate").innerHTML=rate!=null?`${rate.toFixed(1)}<small>%/day</small>`:"—";
-  $("mRateS").textContent=hasRate?(p.rate_source==="pace"?"pace-based estimate":"measured burn rate"):"need ≥2 samples";
+  $("mRateS").textContent=hasRate?"week-to-date average":"need ≥2 samples";
   $("mOver").innerHTML=`$${(q.overage_balance??0).toFixed(0)}`;
   $("mOverS").textContent="overage balance · "+(lim.max_acu_limit?lim.max_acu_limit+" ACU/session cap":"");
 }

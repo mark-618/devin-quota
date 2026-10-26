@@ -24,14 +24,14 @@ python3 quota.py poll         # 手动抓一次写入 history.jsonl
 
 ## 预测口径
 
-与开源同类项目(ccusage / claude-monitor / ai-session-meter）一致的两层结构：
+与 opencode / ccusage / ai-session-meter 相同的 week-to-date 平均速率法：
 
-- **samples rate**: 本周窗口内历史样本的首尾斜率（%/day)。仅当样本跨度
-  ≥1h 且斜率落在 0–150 %/day 的合理区间才采用——短窗口斜率噪声太大。
-- **pace rate (fallback)**: `weekly_pct / elapsed_hours_in_week`(week-to-date
-  均匀速度），即 claude-meter / ai-session-meter 的标准做法。样本不可用时
-  用它，`rate_source` 字段标 `pace` / `samples`。
-- **projected exhaustion**: 选中 rate 线性外推撞到 100% 的日期；若晚于
-  reset 则本周不会耗尽，看板显示 "On pace for X% at reset"。
-- **projected_pct_at_reset**: `pct + rate × (reset - now)`,即 pace projection;
-  上界 clamp 在 reset 处，不做超界放大。
+- `weekly_percentage` 是自 reset 起的累计值，所以 `pct / elapsed_hours` 就是
+  底层曲线的真实平均斜率 —— 等价于采样斜率在整周窗口上的极限，比用监控
+  开始后的一小段样本更准（整数 % 粒度下短窗斜率全是噪声）。`rate_source`
+  恒为 `week_avg`;`window_rate_per_hour` 保留已收集样本的斜率作参考。
+- **projected exhaustion**: rate 线性外推撞到 100% 的日期；晚于 reset 则本周
+  不会耗尽，显示 "On pace for X% at reset"。
+- **projected_pct_at_reset**: `pct + rate × (reset - now)`。
+- 图上另有 **Even pace** 参考线：窗口内 0%→100% 的匀速对角线。实际线在其上
+  = 用超了，其下 = 用得慢；标题行直接显示 `±X% vs even pace`。
