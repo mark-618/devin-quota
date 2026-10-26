@@ -24,9 +24,14 @@ python3 quota.py poll         # 手动抓一次写入 history.jsonl
 
 ## 预测口径
 
-- **burn rate (avg)**: 本周窗口内所有样本首尾两点的斜率（%/day)。样本不足或
-  跨度 <3 分钟时显示 collecting…
-- **pace vs linear**: `weekly_pct / elapsed_fraction_of_week`,即按当前均匀速度
-  到 reset 那天会到多少 %,>100% 标红
-- **projected exhaustion**: burn rate >0 时线性外推撞到 100% 的日期；若晚于
-  reset 则显示 "won't exhaust"
+与开源同类项目(ccusage / claude-monitor / ai-session-meter）一致的两层结构：
+
+- **samples rate**: 本周窗口内历史样本的首尾斜率（%/day)。仅当样本跨度
+  ≥1h 且斜率落在 0–150 %/day 的合理区间才采用——短窗口斜率噪声太大。
+- **pace rate (fallback)**: `weekly_pct / elapsed_hours_in_week`(week-to-date
+  均匀速度），即 claude-meter / ai-session-meter 的标准做法。样本不可用时
+  用它，`rate_source` 字段标 `pace` / `samples`。
+- **projected exhaustion**: 选中 rate 线性外推撞到 100% 的日期；若晚于
+  reset 则本周不会耗尽，看板显示 "On pace for X% at reset"。
+- **projected_pct_at_reset**: `pct + rate × (reset - now)`,即 pace projection;
+  上界 clamp 在 reset 处，不做超界放大。

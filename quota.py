@@ -101,13 +101,17 @@ def predict(history):
         (t0, p0), (t1, p1) = pts[0], pts[-1]
         span_h = (t1 - t0) / 3600
         rate = (p1 - p0) / span_h if span_h > 0.05 else None  # %/hour over the whole window
+        # integer-% granularity makes short windows useless; require >=1h span and a sane rate
+        sane = rate is not None and 0 <= rate * 24 <= 150 and span_h >= 1.0
         out["window_hours"] = span_h
-        out["rate_per_hour"] = rate
-        out["rate_per_day"] = rate * 24 if rate is not None else None
-        if rate and rate > 0:
-            out["exhaust_ts"] = time.time() + (100 - pct) / rate
-            if reset_ts:
-                out["projected_pct_at_reset"] = pct + rate * (reset_ts - time.time())
+        if sane:
+            out["rate_per_hour"] = rate
+            out["rate_per_day"] = rate * 24
+            out["rate_source"] = "samples"
+            if rate > 0:
+                out["exhaust_ts"] = time.time() + (100 - pct) / rate * 3600
+                if reset_ts:
+                    out["projected_pct_at_reset"] = pct + rate * (reset_ts - time.time()) / 3600
         # recent slope: last 2 samples
         (ta, pa), (tb, pb) = pts[-2], pts[-1]
         dh = (tb - ta) / 3600
@@ -118,6 +122,14 @@ def predict(history):
         elapsed_frac = (time.time() - week_start) / (7 * 86400)
         if elapsed_frac > 0.005:
             out["pace_projection_pct"] = pct / elapsed_frac
+            # pace-based rate as fallback forecast when samples too sparse
+            out.setdefault("rate_per_hour", pct / ((time.time() - week_start) / 3600))
+            out.setdefault("rate_per_day", pct / ((time.time() - week_start) / 86400))
+            out.setdefault("rate_source", "pace")
+            if out["rate_per_hour"] and out["rate_per_hour"] > 0:
+                out.setdefault("exhaust_ts", time.time() + (100 - pct) / out["rate_per_hour"] * 3600)
+                out.setdefault("projected_pct_at_reset",
+                               pct + out["rate_per_hour"] * (reset_ts - time.time()) / 3600 if reset_ts else None)
     return out
 
 
