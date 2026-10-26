@@ -9,12 +9,13 @@ Data source: GET https://api.devin.ai/{org}/billing/quota/usage (same call the
 Devin webapp's settings/usage page makes). Auth token read from
 ~/.local/share/devin/credentials.toml.
 """
-import json, re, sys, time, urllib.request, datetime, threading
+import json, re, sys, time, urllib.request, datetime, threading, sqlite3
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 HISTORY = ROOT / "history.jsonl"
+SESSIONS_DB = Path.home() / ".local/share/devin/cli/sessions.db"
 CREDS = Path.home() / ".local/share/devin/credentials.toml"
 API = "https://api.devin.ai"
 POLL_INTERVAL = 60  # seconds; server refreshes when data older than this
@@ -122,13 +123,52 @@ def predict(history):
     return out
 
 
+def usage_curve(week_start, now, pct_now):
+    """Reconstruct cumulative-% staircase: quota only burns while a session is
+    active, so the curve rises during active message intervals (sessions.db)
+    and stays flat between them. Scaled to reach pct_now at now."""
+    if week_start is None or pct_now is None:
+        return []
+    try:
+        con = sqlite3.connect(f"file:{SESSIONS_DB}?mode=ro", uri=True)
+        ts = [r[0] for r in con.execute(
+            "SELECT created_at FROM message_nodes WHERE created_at BETWEEN ? AND ? ORDER BY created_at",
+            (int(week_start), int(now)))]
+        con.close()
+    except Exception:
+        return []
+    if not ts:
+        return []
+    # merge into active intervals; >30min silence = idle flat
+    intervals = []
+    a = b = ts[0]
+    for t in ts[1:]:
+        if t - b > 1800:
+            intervals.append((a, b))
+            a = t
+        b = t
+    intervals.append((a, b))
+    total = sum(b - a or 60 for a, b in intervals)
+    out = [(week_start, 0.0)]
+    cum = 0.0
+    for a, b in intervals:
+        out.append((a, pct_now * cum / total))
+        cum += b - a or 60
+        out.append((b, pct_now * cum / total))
+    out.append((now, pct_now))
+    return out
+
+
 def state(force=False):
     hist = load_history()
     stale = not hist or (time.time() - hist[-1]["ts"]) > POLL_INTERVAL
     if force or stale:
         poll(verbose=False)
         hist = load_history()
-    return {"latest": hist[-1] if hist else {}, "history": hist, "prediction": predict(hist)}
+    pred = predict(hist)
+    if pred.get("reset_ts"):
+        pred["curve"] = usage_curve(pred["reset_ts"] - 7 * 86400, time.time(), pred.get("pct"))
+    return {"latest": hist[-1] if hist else {}, "history": hist, "prediction": pred}
 
 
 class Handler(BaseHTTPRequestHandler):

@@ -156,12 +156,16 @@ function render(){
   const W=c.clientWidth*dpr,H=c.clientHeight*dpr; c.width=W;c.height=H;
   ctx.clearRect(0,0,W,H);ctx.lineJoin="round";
 
-  const pts=(state.history||[]).filter(h=>h.quota&&h.quota.weekly_percentage!=null&&h.ts*1000>weekStart)
-    .map(h=>({t:h.ts*1000,v:h.quota.weekly_percentage}));
-  // quota is 0 at week start — anchor the usage line there so flat/staircase
-  // segments read correctly across the whole window
-  if(!pts.length) pts.push({t:now,v:pct});
-  pts.unshift({t:weekStart,v:0});
+  // actual usage curve: reconstructed staircase — rises during active session
+  // intervals, flat when idle (activity from local sessions.db); falls back to
+  // polled samples when no session data
+  let pts=(p.curve||[]).map(pt=>({t:pt[0]*1000,v:pt[1]}));
+  if(!pts.length){
+    pts=(state.history||[]).filter(h=>h.quota&&h.quota.weekly_percentage!=null&&h.ts*1000>weekStart)
+      .map(h=>({t:h.ts*1000,v:h.quota.weekly_percentage}));
+    if(!pts.length) pts.push({t:now,v:pct});
+    pts.unshift({t:weekStart,v:0});
+  }
 
   // forecast target
   const hasRate=p.rate_per_hour!=null&&p.rate_per_hour>0;
