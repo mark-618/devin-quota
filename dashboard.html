@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>devin quota // weekly burn</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,600;0,800;1,400&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#080c0a; --panel:#0d1310; --line:#1c2a20; --line2:#15211a;
+  --fg:#b8e6c4; --dim:#5d7f6a; --faint:#33473b;
+  --green:#57f79b; --amber:#ffd166; --red:#ff6b6b; --cyan:#7ce8ff;
+  --glow:rgba(87,247,155,.14);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{background:var(--bg);color:var(--fg);font-family:"JetBrains Mono","SF Mono",Menlo,monospace;font-size:14px;line-height:1.45}
+body{min-height:100vh;background:
+  radial-gradient(1200px 600px at 80% -10%, rgba(87,247,155,.06), transparent 60%),
+  radial-gradient(900px 500px at -10% 110%, rgba(124,232,255,.05), transparent 55%),
+  var(--bg)}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;opacity:.35;
+  background:repeating-linear-gradient(0deg,transparent 0 2px,rgba(0,0,0,.18) 2px 4px)}
+.wrap{max-width:980px;margin:0 auto;padding:28px 22px 60px}
+
+header{display:flex;align-items:baseline;gap:14px;border-bottom:1px solid var(--line);padding-bottom:14px;margin-bottom:22px;flex-wrap:wrap}
+h1{font-size:15px;font-weight:800;letter-spacing:.14em;color:var(--green);text-transform:uppercase}
+h1 .tty{color:var(--dim);font-weight:400}
+.hdr-meta{margin-left:auto;font-size:11px;color:var(--dim)}
+.hdr-meta b{color:var(--fg);font-weight:600}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);margin-right:6px;vertical-align:1px;animation:pulse 2.4s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+@media(max-width:760px){.grid{grid-template-columns:1fr}}
+.card{background:linear-gradient(180deg,var(--panel),#0a100c);border:1px solid var(--line);border-radius:6px;padding:16px 18px;position:relative;overflow:hidden}
+.card::before{content:"";position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--glow),transparent)}
+.card h2{font-size:11px;font-weight:600;letter-spacing:.18em;color:var(--dim);text-transform:uppercase;margin-bottom:14px}
+.card h2 em{font-style:normal;color:var(--faint);float:right;letter-spacing:.05em;text-transform:none}
+.wide{grid-column:1/-1}
+
+.bigpct{font-size:56px;font-weight:800;letter-spacing:-.02em;line-height:1;color:var(--green);text-shadow:0 0 24px var(--glow)}
+.bigpct .unit{font-size:22px;font-weight:400;color:var(--dim)}
+.bigpct.warn{color:var(--amber)} .bigpct.crit{color:var(--red)}
+
+.bar{margin:16px 0 6px;font-size:15px;letter-spacing:1px;white-space:pre;overflow:hidden;color:var(--faint)}
+.bar .fill{color:var(--green);text-shadow:0 0 10px var(--glow)}
+.bar.warn .fill{color:var(--amber)} .bar.crit .fill{color:var(--red)}
+.bar .tick{color:var(--dim)}
+
+.row{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px dashed var(--line2);font-size:12.5px}
+.row:first-of-type{border-top:none}
+.row .k{color:var(--dim)} .row .v{color:var(--fg);text-align:right}
+.row .v.hi{color:var(--green);font-weight:600} .row .v.warn{color:var(--amber)} .row .v.crit{color:var(--red)}
+.row .v small{color:var(--dim);font-weight:400}
+
+#spark{width:100%;height:96px;display:block;margin-top:6px}
+.legend{display:flex;gap:18px;font-size:10.5px;color:var(--dim);margin-top:8px}
+.legend i{font-style:normal;margin-right:5px}
+
+.pred{font-size:13px}
+.pred .when{font-size:26px;font-weight:700;color:var(--cyan);margin:2px 0 10px;text-shadow:0 0 18px rgba(124,232,255,.18)}
+.pred .when.ok{color:var(--green)} .pred .when.warn{color:var(--amber)} .pred .when.crit{color:var(--red)}
+.pred .sub{color:var(--dim);font-size:11.5px;margin-bottom:8px}
+
+.status-chip{display:inline-block;padding:1px 8px;border:1px solid var(--line);border-radius:99px;font-size:10.5px;letter-spacing:.08em}
+.status-chip.ok{color:var(--green);border-color:rgba(87,247,155,.3)}
+.status-chip.warn{color:var(--amber);border-color:rgba(255,209,102,.3)}
+.status-chip.crit{color:var(--red);border-color:rgba(255,107,107,.35)}
+
+.sessions{width:100%;border-collapse:collapse;font-size:11.5px;margin-top:4px}
+.sessions th{font-weight:600;color:var(--dim);text-align:left;padding:4px 8px 4px 0;border-bottom:1px solid var(--line);letter-spacing:.06em;font-size:10px;text-transform:uppercase}
+.sessions td{padding:5px 8px 5px 0;border-bottom:1px solid var(--line2);color:var(--fg)}
+.sessions td.num{text-align:right;font-variant-numeric:tabular-nums}
+.sessions td .t{max-width:340px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;vertical-align:bottom}
+
+footer{margin-top:26px;font-size:10.5px;color:var(--faint);display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.err{color:var(--red)}
+a{color:var(--cyan);text-decoration:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1><span class="tty">▮▮</span> devin quota <span class="tty">// weekly burn monitor</span></h1>
+    <div class="hdr-meta"><span class="dot"></span>live · <b id="lastUpdate">—</b> · auto 60s · <a href="#" onclick="refresh(true);return false">refresh</a></div>
+  </header>
+
+  <div class="grid">
+    <section class="card">
+      <h2>weekly quota <em id="wReset">—</em></h2>
+      <div class="bigpct" id="wPct">—</div>
+      <div class="bar" id="wBar"></div>
+      <div class="row"><span class="k">resets</span><span class="v" id="wResetAt">—</span></div>
+      <div class="row"><span class="k">time to reset</span><span class="v" id="wTTR">—</span></div>
+      <div class="row"><span class="k">week elapsed</span><span class="v" id="wElapsed">—</span></div>
+    </section>
+
+    <section class="card">
+      <h2>prediction <em>burn-rate model</em></h2>
+      <div class="pred">
+        <div class="sub">projected exhaustion</div>
+        <div class="when" id="pExhaust">—</div>
+        <div class="row"><span class="k">burn rate (avg)</span><span class="v" id="pRate">—</span></div>
+        <div class="row"><span class="k">projected % at reset</span><span class="v" id="pAtReset">—</span></div>
+        <div class="row"><span class="k">pace vs linear</span><span class="v" id="pPace">—</span></div>
+        <div class="row"><span class="k">samples this week</span><span class="v" id="pSamples">—</span></div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>daily quota <em id="dReset">—</em></h2>
+      <div class="bigpct" id="dPct">—</div>
+      <div class="bar" id="dBar"></div>
+      <div class="row"><span class="k">resets</span><span class="v" id="dResetAt">—</span></div>
+    </section>
+
+    <section class="card">
+      <h2>account <em>plan / credits</em></h2>
+      <div class="row"><span class="k">plan</span><span class="v" id="aPlan">—</span></div>
+      <div class="row"><span class="k">overage balance</span><span class="v" id="aOverage">—</span></div>
+      <div class="row"><span class="k">cycle acu usage</span><span class="v" id="aAcu">—</span></div>
+      <div class="row"><span class="k">billing cycle</span><span class="v" id="aCycle">—</span></div>
+      <div class="row"><span class="k">per-session acu cap</span><span class="v" id="aCap">—</span></div>
+    </section>
+
+    <section class="card wide">
+      <h2>weekly % history <em id="hMeta">—</em></h2>
+      <canvas id="spark"></canvas>
+      <div class="legend"><span><i style="color:var(--green)">━</i>weekly % used</span><span><i style="color:var(--cyan)">╌</i>burn-rate fit</span><span><i style="color:var(--red)">┆</i>reset boundary</span></div>
+    </section>
+  </div>
+
+  <footer>
+    <span>src: api.devin.ai {org}/billing/quota/usage · same endpoint as app.devin.ai/settings/usage</span>
+    <span id="errLine"></span>
+  </footer>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const fmtPct=v=>v==null?"—":(Math.round(v*10)/10)+"%";
+const fmtDT=ts=>ts?new Date(ts*1000).toLocaleString([],{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"}):"—";
+const fmtDur=ms=>{if(ms==null||ms<0)return"—";const d=Math.floor(ms/864e5),h=Math.floor(ms%864e5/36e5),m=Math.floor(ms%36e5/6e4);return(d?d+"d ":"")+(h?h+"h ":"")+m+"m"};
+const cls=v=>v==null?"":v>=85?"crit":v>=60?"warn":"";
+
+function bar(pct,width=44){
+  const w=width-8; const f=Math.round((pct??0)/100*w);
+  const now=Math.min(w,Math.max(0,Math.round((Date.now()%0)/1)));
+  let s="[";
+  for(let i=0;i<w;i++) s+= i<f?"█":"░";
+  return s+"] "+fmtPct(pct);
+}
+
+function spark(history,pred){
+  const c=$("spark"),ctx=c.getContext("2d");
+  const W=c.width=c.clientWidth*2,H=c.height=192; ctx.scale(1,1); ctx.clearRect(0,0,W,H);
+  const pts=history.filter(h=>h.quota&&h.quota.weekly_percentage!=null).map(h=>({t:h.ts*1000,v:h.quota.weekly_percentage}));
+  const now=Date.now(),reset=pred.reset_ts?pred.reset_ts*1000:null;
+  const t0=pts.length?Math.min(pts[0].t, reset?reset-7*864e5:now):now-864e5;
+  const t1=Math.max(now, reset??now, pts.length?pts.at(-1).t:0, pred.exhaust_ts?pred.exhaust_ts*1000:0);
+  const X=t=>8+(t-t0)/(t1-t0)*(W-16), Y=v=>H-14-(v/110)*(H-28);
+  // grid
+  ctx.strokeStyle="#15211a";ctx.fillStyle="#33473b";ctx.font="18px JetBrains Mono";ctx.lineWidth=1;
+  for(const g of [0,25,50,75,100]){ctx.beginPath();ctx.moveTo(8,Y(g));ctx.lineTo(W-8,Y(g));ctx.stroke();ctx.fillText(g+"%",W-70,Y(g)-4);}
+  // reset boundary
+  if(reset&&reset>t0&&reset<t1){ctx.strokeStyle="rgba(255,107,107,.5)";ctx.setLineDash([4,6]);ctx.beginPath();ctx.moveTo(X(reset),8);ctx.lineTo(X(reset),H-14);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle="#ff6b6b";ctx.fillText("reset",X(reset)+4,20);}
+  // line
+  if(pts.length){
+    ctx.strokeStyle="#57f79b";ctx.lineWidth=2.5;ctx.shadowColor="rgba(87,247,155,.4)";ctx.shadowBlur=6;
+    ctx.beginPath();pts.forEach((p,i)=>i?ctx.lineTo(X(p.t),Y(p.v)):ctx.moveTo(X(p.t),Y(p.v)));ctx.stroke();
+    ctx.shadowBlur=0;
+    ctx.fillStyle="#57f79b";const lp=pts.at(-1);ctx.beginPath();ctx.arc(X(lp.t),Y(lp.v),4,0,7);ctx.fill();
+  }
+  // fit line to exhaustion/reset
+  if(pred.rate_per_hour>0&&pts.length){
+    const lp=pts.at(-1);
+    ctx.strokeStyle="#7ce8ff";ctx.setLineDash([6,6]);ctx.beginPath();ctx.moveTo(X(lp.t),Y(lp.v));
+    const tend=Math.min(pred.exhaust_ts?pred.exhaust_ts*1000:Infinity, reset??Infinity);
+    if(isFinite(tend)){const vEnd=lp.v+pred.rate_per_hour*(tend-lp.t)/36e5;ctx.lineTo(X(tend),Y(vEnd));}
+    ctx.stroke();ctx.setLineDash([]);
+  }
+  ctx.fillStyle="#5d7f6a";ctx.font="16px JetBrains Mono";
+  ctx.fillText(new Date(t0).toLocaleDateString([],{month:"short",day:"numeric"}),8,H-2);
+  ctx.fillText(reset?new Date(reset).toLocaleDateString([],{month:"short",day:"numeric"}):"",W-60,H-2);
+}
+
+async function refresh(force){
+  try{
+    const r=await fetch("/api/state"+(force?"?refresh=1":""),{cache:"no-store"});
+    const d=await r.json();
+    const q=d.latest.quota||{}, st=d.latest.stats||{}, lim=d.latest.limits||{}, p=d.prediction||{};
+    const now=Date.now();
+    $("lastUpdate").textContent=new Date().toLocaleTimeString();
+    // weekly
+    $("wPct").innerHTML=(q.weekly_percentage??0)+'<span class="unit">%</span>';
+    $("wPct").className="bigpct "+cls(q.weekly_percentage);
+    $("wBar").textContent=bar(q.weekly_percentage);
+    $("wBar").className="bar "+cls(q.weekly_percentage);
+    const wr=new Date(q.weekly_reset_at);
+    $("wReset").textContent="resets "+wr.toLocaleDateString([],{weekday:"short",month:"short",day:"numeric"});
+    $("wResetAt").textContent=wr.toLocaleString();
+    $("wTTR").textContent=fmtDur(wr-now);
+    const weekStart=wr-7*864e5, el=(now-weekStart)/(7*864e5)*100;
+    $("wElapsed").textContent=fmtPct(el)+" of week window";
+    // daily
+    if(q.hide_daily_quota){ $("dPct").innerHTML='<span class="unit" style="font-size:16px;color:var(--dim)">not enforced for this plan</span>'; $("dBar").textContent=""; $("dReset").textContent=""; $("dResetAt").textContent="—"; }
+    else{
+      $("dPct").innerHTML=(q.daily_percentage??0)+'<span class="unit">%</span>';
+      $("dPct").className="bigpct "+cls(q.daily_percentage);
+      $("dBar").textContent=bar(q.daily_percentage); $("dBar").className="bar "+cls(q.daily_percentage);
+      $("dResetAt").textContent=new Date(q.daily_reset_at).toLocaleString();
+    }
+    // account
+    $("aPlan").innerHTML=q.is_quota_plan?'<span class="status-chip ok">quota plan · weekly cap</span>':'<span class="status-chip warn">non-quota plan</span>';
+    $("aOverage").textContent="$"+(q.overage_balance??st.current_overage??0)+" remaining";
+    $("aAcu").textContent=(st.cycle_total_acu_usage??0)+" ACU";
+    $("aCycle").textContent=st.cycle_start?new Date(st.cycle_start).toLocaleDateString()+" → "+new Date(st.cycle_end).toLocaleDateString():"—";
+    $("aCap").textContent=lim.max_acu_limit?lim.max_acu_limit+" ACU / session":"—";
+    // prediction
+    $("pSamples").textContent=p.samples??0;
+    if(p.rate_per_day!=null){
+      $("pRate").textContent=p.rate_per_day.toFixed(2)+"% / day"+(p.recent_rate_per_hour!=null?`  (recent ${(p.recent_rate_per_hour*24).toFixed(2)}/day)`:"");
+      $("pRate").className="v "+cls(p.rate_per_day>=15?85:p.rate_per_day>=8?60:0);
+    } else $("pRate").textContent="collecting…";
+    if(p.exhaust_ts&&p.exhaust_ts*1000<p.reset_ts*1000){
+      $("pExhaust").textContent=fmtDT(p.exhaust_ts);
+      $("pExhaust").className="when "+(p.exhaust_ts*1000-now<864e5?"crit":"warn");
+    } else if(p.projected_pct_at_reset!=null){
+      $("pExhaust").textContent="won't exhaust";
+      $("pExhaust").className="when ok";
+    } else $("pExhaust").textContent="—";
+    $("pAtReset").textContent=p.projected_pct_at_reset!=null?fmtPct(p.projected_pct_at_reset):"—";
+    $("pAtReset").className="v "+cls(p.projected_pct_at_reset);
+    if(p.pace_projection_pct!=null){
+      const pp=p.pace_projection_pct;
+      $("pPace").textContent=pp<=100?`on pace for ${fmtPct(pp)} (safe)`:`on pace for ${fmtPct(pp)} — over`;
+      $("pPace").className="v "+(pp>100?"crit":pp>85?"warn":"hi");
+    }
+    $("hMeta").textContent=(d.history.length)+" samples";
+    spark(d.history,p);
+    $("errLine").textContent=q.error?("api error: "+q.error):"";
+  }catch(e){$("errLine").textContent="fetch failed: "+e.message}
+}
+refresh(false); setInterval(()=>refresh(false),60000);
+</script>
+</body>
+</html>
