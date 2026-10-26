@@ -156,16 +156,11 @@ function render(){
   const W=c.clientWidth*dpr,H=c.clientHeight*dpr; c.width=W;c.height=H;
   ctx.clearRect(0,0,W,H);ctx.lineJoin="round";
 
-  // actual usage curve: reconstructed staircase — rises during active session
-  // intervals, flat when idle (activity from local sessions.db); falls back to
-  // polled samples when no session data
-  let pts=(p.curve||[]).map(pt=>({t:pt[0]*1000,v:pt[1]}));
-  if(!pts.length){
-    pts=(state.history||[]).filter(h=>h.quota&&h.quota.weekly_percentage!=null&&h.ts*1000>weekStart)
-      .map(h=>({t:h.ts*1000,v:h.quota.weekly_percentage}));
-    if(!pts.length) pts.push({t:now,v:pct});
-    pts.unshift({t:weekStart,v:0});
-  }
+  // actual usage: only real polled samples — the gap from reset to the first
+  // sample is genuinely unknown, drawn as a faint "no data" segment below
+  const pts=(state.history||[]).filter(h=>h.quota&&h.quota.weekly_percentage!=null&&h.ts*1000>weekStart)
+    .map(h=>({t:h.ts*1000,v:h.quota.weekly_percentage}));
+  if(!pts.length) pts.push({t:now,v:pct});
 
   // forecast target
   const hasRate=p.rate_per_hour!=null&&p.rate_per_hour>0;
@@ -215,6 +210,16 @@ function render(){
       ctx.lineTo(X(t),Y(clamp(lp.v+p.rate_per_hour*(t-lp.t)/36e5,0,yMax)));}
     ctx.lineTo(X(fEnd),Y(0));ctx.lineTo(X(lp.t),Y(0));ctx.closePath();
     ctx.fillStyle=ctx.createPattern(pat,"repeat");ctx.fill();
+  }
+
+  // "no data" connector: reset (0%) -> first measured sample, faint dotted
+  if(pts.length&&pts[0].t>weekStart+60e3){
+    ctx.strokeStyle="#4a4a52";ctx.setLineDash([2,5]);ctx.lineWidth=1.2;
+    ctx.beginPath();ctx.moveTo(X(weekStart),Y(0));ctx.lineTo(X(pts[0].t),Y(pts[0].v));ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle="#5b5b63";ctx.font=`${10*dpr}px -apple-system`;
+    const midT=(weekStart+pts[0].t)/2,midV=pts[0].v/2;
+    ctx.fillText("no data — monitoring began "+fmtD(pts[0].t),X(midT)-60*dpr,Y(midV)-8);
   }
 
   // actual usage area + line
