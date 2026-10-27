@@ -17,7 +17,8 @@ ROOT = Path(__file__).resolve().parent
 HISTORY = ROOT / "history.jsonl"
 CREDS = Path.home() / ".local/share/devin/credentials.toml"
 API = "https://api.devin.ai"
-POLL_INTERVAL = 60  # seconds; server refreshes when data older than this
+POLL_ACTIVE = 60    # seconds between polls while quota is moving
+POLL_IDLE = 300     # back off to 5min when idle (integer-% moves slowly)
 
 
 def token():
@@ -124,7 +125,12 @@ def predict(history):
 
 def state(force=False):
     hist = load_history()
-    stale = not hist or (time.time() - hist[-1]["ts"]) > POLL_INTERVAL
+    # adaptive: poll fast while % changed within the last hour, slow when flat
+    pcts = [h["quota"]["weekly_percentage"] for h in hist
+            if h.get("quota", {}).get("weekly_percentage") is not None
+            and h["ts"] > time.time() - 3600]
+    interval = POLL_ACTIVE if len(set(pcts)) > 1 else POLL_IDLE
+    stale = not hist or (time.time() - hist[-1]["ts"]) > interval
     if force or stale:
         poll(verbose=False)
         hist = load_history()
@@ -161,7 +167,7 @@ class Handler(BaseHTTPRequestHandler):
 def serve(port=8377):
     poll(verbose=True)  # seed
     srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    print(f"dashboard: http://localhost:{port}  (polls quota every {POLL_INTERVAL}s on refresh)")
+    print(f"dashboard: http://localhost:{port}  (adaptive poll {POLL_ACTIVE}s active / {POLL_IDLE}s idle)")
     srv.serve_forever()
 
 
@@ -171,7 +177,7 @@ if __name__ == "__main__":
         for _ in range(n):
             poll()
             if _ < n - 1:
-                time.sleep(POLL_INTERVAL)
+                time.sleep(POLL_ACTIVE)
     elif len(sys.argv) > 1 and sys.argv[1] == "serve":
         serve(int(sys.argv[2]) if len(sys.argv) > 2 else 8377)
     else:
