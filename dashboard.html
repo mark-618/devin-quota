@@ -15,6 +15,7 @@
   --hair:#2e2e33;
   --usage:#3ddc84;
   --fc:#f5c97b;
+  --hot:#ff9d70;
   --limit:#6e6e76;
   --blue:#0a84ff;
 }
@@ -93,6 +94,7 @@ footer code{background:var(--card2);border-radius:5px;padding:1px 6px;font-size:
         <span><span class="sw" style="background:var(--usage)"></span>Usage</span>
         <span><span class="sw pace"></span>Even pace</span>
         <span><span class="sw dash"></span>Forecast</span>
+        <span><span class="sw" style="background:repeating-linear-gradient(90deg,var(--hot) 0 3px,transparent 3px 6px)"></span>Hot pace</span>
         <span><span class="sw dots"></span>Weekly limit</span>
       </div>
     </div>
@@ -169,6 +171,7 @@ function render(){
   // y domain: enough to show 100 line + forecast overshoot (like opencode 150%)
   let yMax=100*1.35;
   if(exhaustT&&exhaustT<resetT) yMax=Math.max(yMax,(100+clamp(p.rate_per_day,0,50))*1.25);
+  if(p.hot_exhaust_ts&&p.hot_exhaust_ts*1000<resetT) yMax=Math.max(yMax,(100+clamp(p.hot_rate_per_day,0,80))*1.15);
   const x0=weekStart, x1=resetT;
   const X=t=>18+(clamp(t,x0,x1)-x0)/(x1-x0)*(W-36);
   const Y=v=>H-30-(v/yMax)*(H-50);
@@ -242,6 +245,22 @@ function render(){
     for(let i=1;i<=steps;i++){const t=lp.t+(fEnd-lp.t)*i/steps;
       ctx.lineTo(X(t),Y(clamp(lp.v+p.rate_per_hour*(t-lp.t)/36e5,0,yMax)));}
     ctx.stroke();ctx.setLineDash([]);
+    // hot-pace bound: measured recent slope — "if you keep burning like this"
+    const hotR=p.hot_rate_per_day;
+    if(hotR!=null&&hotR>p.rate_per_day*1.05){
+      const hotEnd=p.hot_exhaust_ts&&p.hot_exhaust_ts*1000<resetT?p.hot_exhaust_ts*1000:resetT;
+      const hotEndV=clamp(lp.v+hotR/24*(hotEnd-lp.t)/36e5,0,yMax);
+      ctx.strokeStyle="#ff9d70";ctx.lineWidth=1.6;ctx.setLineDash([3,4]);
+      ctx.beginPath();ctx.moveTo(X(lp.t),Y(lp.v));
+      const hs=Math.max(2,Math.round((hotEnd-lp.t)/(3600e3)));
+      for(let i=1;i<=hs;i++){const t=lp.t+(hotEnd-lp.t)*i/hs;
+        ctx.lineTo(X(t),Y(clamp(lp.v+hotR/24*(t-lp.t)/36e5,0,yMax)));}
+      ctx.stroke();ctx.setLineDash([]);
+      ctx.fillStyle="#ff9d70";ctx.beginPath();ctx.arc(X(hotEnd),Y(hotEndV),3,0,7);ctx.fill();
+      const hl=Math.round(hotEndV)+"%";
+      ctx.font=`${10.5*dpr}px -apple-system`;
+      ctx.fillText(hl,X(hotEnd)-ctx.measureText(hl).width-6,Y(hotEndV)-8);
+    }
     // end marker
     ctx.fillStyle="#f5c97b";ctx.beginPath();ctx.arc(X(fEnd),Y(fEndV),4,0,7);ctx.fill();
     ctx.strokeStyle="#141416";ctx.lineWidth=1.6;ctx.stroke();
@@ -280,7 +299,12 @@ function render(){
 
   // ---------- footer + minis ----------
   const rate=p.rate_per_day;
-  $("avg").innerHTML=rate!=null?`Averaging <b>${rate.toFixed(1)}%</b> a day (week-to-date)`:`样本 ${p.samples??0} · 每小时自动记录`;
+  let avgHtml=rate!=null?`Averaging <b>${rate.toFixed(1)}%</b> a day (week-to-date)`:`样本 ${p.samples??0} · 每小时自动记录`;
+  if(p.hot_rate_per_day!=null&&p.hot_rate_per_day>rate*1.05){
+    const he=p.hot_exhaust_ts;
+    avgHtml+=` · hot pace ${p.hot_rate_per_day.toFixed(1)}%/day`+(he&&he*1000<resetT?` → hits limit <b style="color:var(--hot)">${fmtD(he*1000)}</b>`:"");
+  }
+  $("avg").innerHTML=avgHtml;
   $("mRemain").innerHTML=`${(100-pct).toFixed(0)}<small>%</small>`;
   $("mRemainS").textContent="weekly quota left";
   $("mReset").innerHTML=fmtDur(resetT-now);

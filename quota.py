@@ -98,13 +98,19 @@ def predict(history):
            if h.get("quota", {}).get("weekly_percentage") is not None
            and (week_start is None or h["ts"] > week_start)]
     out = {"pct": pct, "reset_ts": reset_ts, "samples": len(pts)}
-    # recent slope of collected samples (info only; integer-% steps make it noisy)
+    # hot rate: measured slope over the collected sample window — the upper
+    # bound "if you keep burning at the recently observed pace" forecast
     if len(pts) >= 2:
         (ta, pa), (tb, pb) = pts[0], pts[-1]
         dh = (tb - ta) / 3600
-        if dh > 0:
-            out["window_rate_per_hour"] = (pb - pa) / dh
+        if dh >= 1.0 and pb != pa:
+            hot = (pb - pa) / dh
+            out["hot_rate_per_day"] = hot * 24
             out["window_hours"] = dh
+            if hot > 0:
+                out["hot_exhaust_ts"] = time.time() + (100 - pct) / hot * 3600
+                if reset_ts:
+                    out["hot_projected_pct_at_reset"] = pct + hot * (reset_ts - time.time()) / 3600
     # week-to-date average rate: pct is cumulative since reset, so pct/elapsed
     # is the true mean slope of the underlying curve — same convention as
     # opencode/ccusage "Averaging X% a day" and the forecast line.
