@@ -34,7 +34,13 @@ html,body{background:var(--bg);color:var(--text);
 .pill .dot{width:6px;height:6px;border-radius:50%;background:var(--usage)}
 .pill .dot.err{background:var(--red,#ff453a)}
 
-.card{background:var(--card);border:1px solid var(--hair);border-radius:14px;padding:22px 24px 16px}
+.card{background:var(--card);border:1px solid var(--hair);border-radius:14px;padding:22px 24px 16px;position:relative}
+#cv{cursor:crosshair;user-select:none}
+#tip{position:absolute;display:none;pointer-events:none;background:#2a2a2f;border:1px solid var(--hair);
+  border-radius:8px;padding:7px 10px;font-size:11.5px;color:var(--text);white-space:nowrap;z-index:5;
+  box-shadow:0 4px 14px rgba(0,0,0,.4)}
+#tip .tt{color:var(--faint);margin-bottom:2px}
+#tip .u{color:var(--usage)}#tip .f{color:var(--fc)}#tip .p{color:var(--sub)}
 
 .top{display:flex;align-items:baseline;gap:14px;margin-bottom:4px}
 .top .pct{font-size:30px;font-weight:700;letter-spacing:-.02em;font-variant-numeric:tabular-nums}
@@ -59,7 +65,7 @@ html,body{background:var(--bg);color:var(--text);
 .legend .sw.dots{background:repeating-linear-gradient(90deg,var(--limit) 0 3px,transparent 3px 6px)}
 .legend .sw.pace{background:repeating-linear-gradient(90deg,#4e4e58 0 4px,transparent 4px 8px)}
 
-.sub-cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:14px}
+.sub-cards{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-top:14px}
 @media(max-width:760px){.sub-cards{grid-template-columns:repeat(2,1fr)}}
 .mini{background:var(--card);border:1px solid var(--hair);border-radius:12px;padding:14px 16px}
 .mini .k{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em}
@@ -77,7 +83,7 @@ footer code{background:var(--card2);border-radius:5px;padding:1px 6px;font-size:
     <div class="t">Devin 额度 <small>· weekly quota burn</small></div>
     <div class="right">
       <div class="pill"><span class="dot" id="liveDot"></span><span id="liveTxt">Live</span> · <span id="clock">—</span></div>
-      <div class="pill" onclick="refresh(true)">Refresh</div>
+      <div class="pill" onclick="refresh(true);setTimeout(()=>refresh(false),4500)">Refresh</div>
     </div>
   </div>
 
@@ -87,6 +93,7 @@ footer code{background:var(--card2);border-radius:5px;padding:1px 6px;font-size:
       <div class="meta" id="meta">读取中…</div>
     </div>
     <canvas id="cv"></canvas>
+    <div id="tip"></div>
     <div class="xbar" id="xbar"></div>
     <div class="foot">
       <div class="avg" id="avg">—</div>
@@ -104,10 +111,12 @@ footer code{background:var(--card2);border-radius:5px;padding:1px 6px;font-size:
     <div class="mini"><div class="k">剩余额度</div><div class="v" id="mRemain">—</div><div class="s" id="mRemainS"></div></div>
     <div class="mini"><div class="k">距重置</div><div class="v" id="mReset">—</div><div class="s" id="mResetS"></div></div>
     <div class="mini"><div class="k">燃烧速度</div><div class="v" id="mRate">—</div><div class="s" id="mRateS"></div></div>
+    <div class="mini"><div class="k">本小时</div><div class="v" id="mHour">—</div><div class="s" id="mHourS"></div></div>
+    <div class="mini"><div class="k">今日</div><div class="v" id="mToday">—</div><div class="s" id="mTodayS"></div></div>
     <div class="mini"><div class="k">超额余额</div><div class="v" id="mOver">—</div><div class="s" id="mOverS"></div></div>
   </div>
 
-  <footer>数据源 <code>api.devin.ai · billing/quota/usage</code>(app.devin.ai 官方页面同源) · 每 60s 刷新 · 历史 <code>history.jsonl</code></footer>
+  <footer>数据源 <code>api.devin.ai · billing/quota/usage</code>(app.devin.ai 官方页面同源) · 每 60s 刷新 · 历史 <code>history.jsonl</code> · 拖动框选放大 · 双击还原</footer>
 </div>
 
 <script>
@@ -115,9 +124,10 @@ const $=id=>document.getElementById(id);
 const clamp=(v,a,b)=>Math.min(b,Math.max(a,v));
 const DAY=864e5;
 const fmtD=t=>new Date(t).toLocaleDateString("en-US",{month:"short",day:"numeric"});
+const fmtDT=t=>new Date(t).toLocaleString("en-US",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
 const fmtDur=ms=>{const d=Math.floor(ms/DAY),h=Math.floor(ms%DAY/36e5);return d?d+"d "+h+"h":Math.floor(ms/36e5)+"h "+Math.floor(ms%36e5/6e4)+"m"};
 
-let state=null;
+let state=null, view=null, hoverT=null, dragT0=null, dragT1=null;
 
 async function refresh(force){
   try{
@@ -172,7 +182,7 @@ function render(){
   let yMax=100*1.35;
   if(exhaustT&&exhaustT<resetT) yMax=Math.max(yMax,(100+clamp(p.rate_per_day,0,50))*1.25);
   if(p.hot_exhaust_ts&&p.hot_exhaust_ts*1000<resetT) yMax=Math.max(yMax,(100+clamp(p.hot_rate_per_day,0,80))*1.15);
-  const x0=weekStart, x1=resetT;
+  const x0=view?view.x0:weekStart, x1=view?view.x1:resetT;
   const X=t=>18+(clamp(t,x0,x1)-x0)/(x1-x0)*(W-36);
   const Y=v=>H-30-(v/yMax)*(H-50);
 
@@ -225,16 +235,19 @@ function render(){
     ctx.fillText("no data — monitoring began "+fmtD(pts[0].t),X(midT)-60*dpr,Y(midV)-8);
   }
 
-  // actual usage area + line
+  // actual usage area + step line (integer-% quota is a staircase)
   if(pts.length){
     const g=ctx.createLinearGradient(0,0,0,H);
     g.addColorStop(0,"rgba(61,220,132,.22)");g.addColorStop(1,"rgba(61,220,132,0)");
     ctx.beginPath();ctx.moveTo(X(pts[0].t),Y(0));
-    pts.forEach(pt=>ctx.lineTo(X(pt.t),Y(pt.v)));
-    ctx.lineTo(X(pts.at(-1).t),Y(0));ctx.closePath();ctx.fillStyle=g;ctx.fill();
+    let pv=0;
+    pts.forEach(pt=>{ctx.lineTo(X(pt.t),Y(pv));ctx.lineTo(X(pt.t),Y(pt.v));pv=pt.v;});
+    ctx.lineTo(X(now),Y(0));ctx.closePath();ctx.fillStyle=g;ctx.fill();
 
     ctx.strokeStyle="#3ddc84";ctx.lineWidth=2;ctx.beginPath();
-    pts.forEach((pt,i)=>i?ctx.lineTo(X(pt.t),Y(pt.v)):ctx.moveTo(X(pt.t),Y(pt.v)));ctx.stroke();
+    pv=pts[0].v;ctx.moveTo(X(pts[0].t),Y(pv));
+    pts.forEach((pt,i)=>{if(!i)return;ctx.lineTo(X(pt.t),Y(pv));ctx.lineTo(X(pt.t),Y(pt.v));pv=pt.v;});
+    ctx.lineTo(X(now),Y(pv));ctx.stroke();
   }
 
   // forecast dashed line
@@ -277,15 +290,41 @@ function render(){
   ctx.strokeStyle="#6e6e76";ctx.setLineDash([2,5]);ctx.lineWidth=1.4;
   ctx.beginPath();ctx.moveTo(18,Y(100));ctx.lineTo(W-18,Y(100));ctx.stroke();ctx.setLineDash([]);
 
-  // ---------- x labels ----------
-  const xb=$("xbar");xb.innerHTML="";
-  const marks=[{t:weekStart,l:fmtD(weekStart)}];
-  const mid=weekStart+3.5*DAY;
-  marks.push({t:mid,l:fmtD(mid)});
-  if(exhaustT&&exhaustT<resetT&&exhaustT>now-2*DAY){
-    marks.push({t:exhaustT,l:fmtD(exhaustT),hit:true});
+  // ---------- hover crosshair + drag-select ----------
+  if(dragT0!=null&&dragT1!=null&&dragT1!==dragT0){
+    ctx.fillStyle="rgba(10,132,255,.10)";
+    const xa=X(Math.min(dragT0,dragT1)),xb2=X(Math.max(dragT0,dragT1));
+    ctx.fillRect(xa,0,xb2-xa,H-30);
   }
-  marks.push({t:resetT,l:fmtD(resetT),end:true});
+  if(hoverT!=null&&hoverT>x0&&hoverT<x1){
+    ctx.strokeStyle="#55555f";ctx.lineWidth=1;
+    ctx.beginPath();ctx.moveTo(X(hoverT),Y(0));ctx.lineTo(X(hoverT),14);ctx.stroke();
+    // step value at hoverT: last sample <= t
+    let uv=null;for(const pt of pts){if(pt.t<=hoverT)uv=pt.v;else break;}
+    const tip=$("tip");
+    let html=`<div class="tt">${fmtDT(hoverT)}</div>`;
+    if(uv!=null)html+=`<div class="u">usage ${Math.round(uv)}%</div>`;
+    if(lp&&hasRate&&hoverT>lp.t){
+      const fv=clamp(lp.v+p.rate_per_hour*(hoverT-lp.t)/36e5,0,yMax);
+      html+=`<div class="f">forecast ${Math.round(fv)}%</div>`;
+    }
+    html+=`<div class="p">even pace ${Math.round((hoverT-weekStart)/(resetT-weekStart)*100)}%</div>`;
+    tip.innerHTML=html;tip.style.display="block";
+    const cx=X(hoverT)/dpr;
+    tip.style.left=Math.min(cx+12,c.clientWidth-tip.offsetWidth-8)+"px";
+    tip.style.top="70px";
+  }else{$("tip").style.display="none";}
+
+  // ---------- x labels (adaptive density by visible span) ----------
+  const xb=$("xbar");xb.innerHTML="";
+  const span=x1-x0;
+  const step=span>5*DAY?DAY:span>2*DAY?12*36e5:span>DAY?6*36e5:span>6*36e5?2*36e5:36e5;
+  const marks=[];
+  for(let t=Math.ceil(x0/step)*step;t<x1;t+=step)
+    marks.push({t,l:span>2*DAY?fmtD(t):fmtDT(t).replace(", "," ")});
+  marks.unshift({t:x0,l:view?fmtDT(x0):fmtD(x0)});
+  if(exhaustT&&exhaustT<x1&&exhaustT>x0) marks.push({t:exhaustT,l:fmtD(exhaustT),hit:true});
+  marks.push({t:x1,l:view?fmtDT(x1):fmtD(x1),end:true});
   marks.sort((a,b)=>a.t-b.t);
   marks.forEach(m=>{
     const el=document.createElement("div");
@@ -311,12 +350,46 @@ function render(){
   $("mResetS").textContent="until "+fmtD(resetT)+" reset";
   $("mRate").innerHTML=rate!=null?`${rate.toFixed(1)}<small>%/day</small>`:"—";
   $("mRateS").textContent=hasRate?"week-to-date average":"need ≥2 samples";
+  // 本小时/今日 deltas from measured samples
+  const since=ms=>{const base=[...pts].reverse().find(pt=>pt.t<=now-ms);return base?pct-base.v:0;};
+  const v1h=since(36e5);
+  const dayStart=new Date();dayStart.setHours(0,0,0,0);
+  const vToday=since(now-dayStart.getTime());
+  $("mHour").innerHTML=`${v1h>0?"+":""}${v1h.toFixed(0)}<small>%</small>`;
+  $("mHourS").textContent="burned last 60min"+(v1h===0?" · idle":"");
+  $("mToday").innerHTML=`${vToday>0?"+":""}${vToday.toFixed(0)}<small>%</small>`;
+  $("mTodayS").textContent="since midnight";
   $("mOver").innerHTML=`$${(q.overage_balance??0).toFixed(0)}`;
   $("mOverS").textContent="overage balance · "+(lim.max_acu_limit?lim.max_acu_limit+" ACU/session cap":"");
 }
 
 refresh(false);setInterval(()=>refresh(false),60000);
+setInterval(()=>{$("clock").textContent=new Date().toLocaleTimeString("en-GB")},1000);
 addEventListener("resize",()=>state&&render());
+
+// chart interaction: hover crosshair + drag-select zoom
+{
+  const c=$("cv");
+  const tAt=e=>{const q=state.latest.quota||{};
+    const rs=new Date(q.weekly_reset_at).getTime(),ws=rs-7*DAY;
+    const vx0=view?view.x0:ws,vx1=view?view.x1:rs;
+    return vx0+(e.offsetX-18)/(c.clientWidth-36)*(vx1-vx0);};
+  c.addEventListener("mousemove",e=>{
+    hoverT=tAt(e);
+    if(dragT0!=null){dragT1=tAt(e);}
+    if(state)render();
+  });
+  c.addEventListener("mouseleave",()=>{hoverT=null;dragT1=null;if(state)render();});
+  c.addEventListener("mousedown",e=>{dragT0=tAt(e);dragT1=null;e.preventDefault();});
+  c.addEventListener("mouseup",e=>{
+    if(dragT0!=null&&dragT1!=null){
+      const a=Math.min(dragT0,dragT1),b=Math.max(dragT0,dragT1);
+      if(b-a>10*60e3)view={x0:a,x1:b};
+    }
+    dragT0=dragT1=null;if(state)render();
+  });
+  c.addEventListener("dblclick",()=>{view=null;if(state)render();});
+}
 </script>
 </body>
 </html>

@@ -129,6 +129,16 @@ def predict(history):
     return out
 
 
+_POLL_LOCK = threading.Lock()
+
+
+def _poll_bg():
+    try:
+        poll(verbose=False)
+    finally:
+        _POLL_LOCK.release()
+
+
 def state(force=False):
     hist = load_history()
     # adaptive: poll fast while % changed within the last hour, slow when flat
@@ -137,9 +147,9 @@ def state(force=False):
             and h["ts"] > time.time() - 3600]
     interval = POLL_ACTIVE if len(set(pcts)) > 1 else POLL_IDLE
     stale = not hist or (time.time() - hist[-1]["ts"]) > interval
-    if force or stale:
-        poll(verbose=False)
-        hist = load_history()
+    if (force or stale) and _POLL_LOCK.acquire(blocking=False):
+        # poll in background so the HTTP response is instant; next fetch picks it up
+        threading.Thread(target=_poll_bg, daemon=True).start()
     return {"latest": hist[-1] if hist else {}, "history": hist, "prediction": predict(hist)}
 
 

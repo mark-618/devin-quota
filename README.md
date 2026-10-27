@@ -9,9 +9,17 @@ python3 quota.py serve        # http://localhost:8377
 python3 quota.py poll         # 手动抓一次写入 history.jsonl
 ```
 
-- `serve` 模式：看板每 60s 自动刷新，数据过期时才打 API（间隔 60s）
+- `serve` 模式：看板每 60s 自动刷新，数据过期时才打 API（间隔 60s，空闲时自动降到 5min）
+- `?refresh=1` 异步触发后台 poll，立即返回当前 state；前端点 Refresh 后 4.5s 自动再拉一次拿新样本
 - 数据落盘：`history.jsonl`,一行一个 snapshot
 - token 从 `~/.local/share/devin/credentials.toml` 读，org 从 `~/.config/devin/config.json` 读
+- launchd 常驻：`com.mark.devin-quota`(RunAtLoad + KeepAlive)，日志 `/tmp/devin-quota-server.log`
+
+## 看板交互
+
+- **Hover**：十字线 + tooltip，显示时刻 / 实测 usage / forecast / even pace 差值
+- **拖动框选**放大 X 轴区间，**双击**还原全周视图
+- 统计卡：剩余额度 / 距 reset / 燃烧速度 / 本小时消耗 / 今日消耗 / overage 余额 — 全部由 `history.jsonl` 实测样本计算，无回填数据
 
 ## 数据源
 
