@@ -15,7 +15,7 @@
   --hair:#2e2e33;
   --usage:#3ddc84;
   --fc:#f5c97b;
-  --hot:#ff9d70;
+  --hot:#c77dff;
   --limit:#6e6e76;
   --blue:#0a84ff;
 }
@@ -116,7 +116,7 @@ footer code{background:var(--card2);border-radius:5px;padding:1px 6px;font-size:
     <div class="mini"><div class="k">超额余额</div><div class="v" id="mOver">—</div><div class="s" id="mOverS"></div></div>
   </div>
 
-  <footer>数据源 <code>api.devin.ai · billing/quota/usage</code>(app.devin.ai 官方页面同源) · 每 60s 刷新 · 历史 <code>history.jsonl</code> · 拖动框选放大 · 双击还原</footer>
+  <footer>数据源 <code>api.devin.ai · billing/quota/usage</code>(app.devin.ai 官方页面同源) · 每 60s 刷新 · 历史 <code>history.jsonl</code> · 拖动框选/双指捏合缩放 · 横滚平移 · 双击还原</footer>
 </div>
 
 <script>
@@ -263,13 +263,13 @@ function render(){
     if(hotR!=null&&hotR>0){
       const hotEnd=p.hot_exhaust_ts&&p.hot_exhaust_ts*1000<resetT?p.hot_exhaust_ts*1000:resetT;
       const hotEndV=clamp(lp.v+hotR/24*(hotEnd-lp.t)/36e5,0,yMax);
-      ctx.strokeStyle="#ff9d70";ctx.lineWidth=1.6;ctx.setLineDash([3,4]);
+      ctx.strokeStyle="#c77dff";ctx.lineWidth=1.6;ctx.setLineDash([3,4]);
       ctx.beginPath();ctx.moveTo(X(lp.t),Y(lp.v));
       const hs=Math.max(2,Math.round((hotEnd-lp.t)/(3600e3)));
       for(let i=1;i<=hs;i++){const t=lp.t+(hotEnd-lp.t)*i/hs;
         ctx.lineTo(X(t),Y(clamp(lp.v+hotR/24*(t-lp.t)/36e5,0,yMax)));}
       ctx.stroke();ctx.setLineDash([]);
-      ctx.fillStyle="#ff9d70";ctx.beginPath();ctx.arc(X(hotEnd),Y(hotEndV),3,0,7);ctx.fill();
+      ctx.fillStyle="#c77dff";ctx.beginPath();ctx.arc(X(hotEnd),Y(hotEndV),3,0,7);ctx.fill();
       const hl=Math.round(hotEndV)+"%";
       ctx.font=`${10.5*dpr}px -apple-system`;
       ctx.fillText(hl,X(hotEnd)-ctx.measureText(hl).width-6,Y(hotEndV)-8);
@@ -389,6 +389,29 @@ addEventListener("resize",()=>state&&render());
     dragT0=dragT1=null;if(state)render();
   });
   c.addEventListener("dblclick",()=>{view=null;if(state)render();});
+  // trackpad: pinch (ctrlKey+wheel) or vertical scroll zooms toward cursor,
+  // two-finger horizontal scroll pans. min zoom 1h, full range resets view.
+  c.addEventListener("wheel",e=>{
+    e.preventDefault();
+    if(!state)return;
+    const q=state.latest.quota||{};
+    const rs=new Date(q.weekly_reset_at).getTime(),ws=rs-7*DAY;
+    const vx0=view?view.x0:ws,vx1=view?view.x1:rs,span=vx1-vx0;
+    if(Math.abs(e.deltaX)>Math.abs(e.deltaY)){
+      const d=span*e.deltaX/(c.clientWidth*0.8);
+      let a=vx0+d,b=vx1+d;
+      if(a<ws){b+=ws-a;a=ws;} if(b>rs){a-=b-rs;b=rs;}
+      view=(a<=ws&&b>=rs)?null:{x0:a,x1:b};
+    }else{
+      const f=Math.exp(e.deltaY*0.0025);
+      const tc=vx0+(e.offsetX-18)/(c.clientWidth-36)*span;
+      let a=tc-(tc-vx0)*f,b=tc+(vx1-tc)*f;
+      if(b-a<3600e3){const m=(a+b)/2;a=m-1800e3;b=m+1800e3;}
+      if(a<ws)a=ws; if(b>rs)b=rs;
+      view=(b-a>=(rs-ws)*0.995)?null:{x0:a,x1:b};
+    }
+    render();
+  },{passive:false});
 }
 </script>
 </body>
