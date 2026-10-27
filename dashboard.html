@@ -247,7 +247,7 @@ function render(){
     ctx.stroke();ctx.setLineDash([]);
     // hot-pace bound: measured recent slope — "if you keep burning like this"
     const hotR=p.hot_rate_per_day;
-    if(hotR!=null&&hotR>p.rate_per_day*1.05){
+    if(hotR!=null&&hotR>0){
       const hotEnd=p.hot_exhaust_ts&&p.hot_exhaust_ts*1000<resetT?p.hot_exhaust_ts*1000:resetT;
       const hotEndV=clamp(lp.v+hotR/24*(hotEnd-lp.t)/36e5,0,yMax);
       ctx.strokeStyle="#ff9d70";ctx.lineWidth=1.6;ctx.setLineDash([3,4]);
@@ -300,7 +300,7 @@ function render(){
   // ---------- footer + minis ----------
   const rate=p.rate_per_day;
   let avgHtml=rate!=null?`Averaging <b>${rate.toFixed(1)}%</b> a day (week-to-date)`:`样本 ${p.samples??0} · 每小时自动记录`;
-  if(p.hot_rate_per_day!=null&&p.hot_rate_per_day>rate*1.05){
+  if(p.hot_rate_per_day!=null&&p.hot_rate_per_day>0){
     const he=p.hot_exhaust_ts;
     avgHtml+=` · hot pace ${p.hot_rate_per_day.toFixed(1)}%/day`+(he&&he*1000<resetT?` → hits limit <b style="color:var(--hot)">${fmtD(he*1000)}</b>`:"");
   }
