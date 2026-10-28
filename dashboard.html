@@ -65,6 +65,15 @@ html,body{background:var(--bg);color:var(--text);
 .legend .sw.dots{background:repeating-linear-gradient(90deg,var(--limit) 0 3px,transparent 3px 6px)}
 .legend .sw.pace{background:repeating-linear-gradient(90deg,#4e4e58 0 4px,transparent 4px 8px)}
 
+.bsect{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin:18px 0 8px}
+.bars{display:flex;gap:3px;align-items:flex-end;height:54px}
+.bars .b{flex:1;min-width:0;border-radius:3px 3px 1px 1px;background:linear-gradient(180deg,#3ddc84,#23a866);min-height:2px;cursor:crosshair}
+.bars .b.zero{background:var(--card2)}
+.bars .b.nodata{background:transparent;box-shadow:inset 0 0 0 1px var(--hair)}
+.bars .b.cur{opacity:.75;outline:1px solid rgba(61,220,132,.45)}
+.blbls{display:flex;gap:3px;margin-top:5px}
+.blbls span{flex:1;min-width:0;text-align:center;font-size:9.5px;color:var(--faint);white-space:nowrap;overflow:hidden}
+
 .sub-cards{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-top:14px}
 @media(max-width:760px){.sub-cards{grid-template-columns:repeat(2,1fr)}}
 .mini{background:var(--card);border:1px solid var(--hair);border-radius:12px;padding:14px 16px}
@@ -105,6 +114,10 @@ footer code{background:var(--card2);border-radius:5px;padding:1px 6px;font-size:
         <span><span class="sw dots"></span>Weekly limit</span>
       </div>
     </div>
+    <div class="bsect">Last 24h · hourly burn</div>
+    <div class="bars" id="hBars"></div><div class="blbls" id="hLbls"></div>
+    <div class="bsect">This week · daily burn</div>
+    <div class="bars" id="dBars"></div><div class="blbls" id="dLbls"></div>
   </div>
 
   <div class="sub-cards">
@@ -361,6 +374,40 @@ function render(){
   $("mTodayS").textContent="since midnight";
   $("mOver").innerHTML=`$${(q.overage_balance??0).toFixed(0)}`;
   $("mOverS").textContent="overage balance · "+(lim.max_acu_limit?lim.max_acu_limit+" ACU/session cap":"");
+
+  // ---------- burn bars (hourly 24h + daily week), differenced from samples ----------
+  const valAt=t=>{
+    if(t<=weekStart)return 0;
+    let v=null;
+    for(const p of pts){if(p.t<=t)v=p.v;else break;}
+    return v;
+  };
+  const has=(a,b)=>pts.some(p=>p.t>=a&&p.t<b);
+  const bucket=(a,b,lbl)=>{
+    const e=Math.min(b,now);
+    const va=valAt(Math.max(a,weekStart)),vb=valAt(e);
+    const nd=e>a&&(va==null||vb==null||!has(a,e));
+    return {a,b,lbl,v:nd?null:Math.max(0,vb-va),nodata:nd,cur:a<=now&&b>now};
+  };
+  const mkBars=(buckets,bEl,lEl)=>{
+    const mx=Math.max(1,...buckets.map(b=>b.v??0));
+    bEl.innerHTML=buckets.map((b,i)=>{
+      const cls=b.nodata?"nodata":((b.v>0?"":"zero")+(b.cur?" cur":""));
+      return `<div class="b ${cls}" data-i="${i}" style="height:${b.nodata?8:Math.max(4,b.v/mx*100)}%"></div>`;
+    }).join("");
+    lEl.innerHTML=buckets.map(b=>`<span>${b.lbl}</span>`).join("");
+    bEl._d=buckets;
+  };
+  const h0=Math.floor(now/36e5)*36e5-23*36e5;
+  mkBars([...Array(24)].map((_,i)=>{
+    const a=h0+i*36e5;
+    return bucket(a,a+36e5,new Date(a).getHours());
+  }),$("hBars"),$("hLbls"));
+  const d0=new Date(weekStart);d0.setHours(0,0,0,0);
+  const dB=[];
+  for(let a=d0.getTime();a<resetT;a+=DAY)
+    dB.push(bucket(a,a+DAY,fmtD(a).replace("Oct ","").replace("Nov ","")));
+  mkBars(dB,$("dBars"),$("dLbls"));
 }
 
 refresh(false);setInterval(()=>refresh(false),60000);
@@ -418,6 +465,22 @@ addEventListener("resize",()=>state&&render());
     }
     render();
   },{passive:false});
+  // bar tooltips (hourly + daily strips)
+  const bt=e=>{
+    const b=e.target.closest(".b"),tip=$("tip");
+    if(!b||!e.currentTarget._d){tip.style.display="none";return;}
+    const d=e.currentTarget._d[+b.dataset.i];
+    const card=e.currentTarget.closest(".card").getBoundingClientRect();
+    const range=d.b-d.a>=DAY?fmtD(d.a):`${new Date(d.a).getHours()}:00–${new Date(d.b).getHours()}:00`;
+    tip.innerHTML=`<div class="tt">${range}</div>`+(d.nodata?`<div class="p">no data</div>`:`<div class="u">+${d.v}%</div>`);
+    tip.style.display="block";
+    tip.style.left=Math.min(e.clientX-card.left+12,card.width-tip.offsetWidth-8)+"px";
+    tip.style.top=(e.clientY-card.top-46)+"px";
+  };
+  for(const id of ["hBars","dBars"]){
+    $(id).addEventListener("mousemove",bt);
+    $(id).addEventListener("mouseleave",()=>{$("tip").style.display="none";});
+  }
 }
 </script>
 </body>
