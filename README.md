@@ -9,17 +9,19 @@ python3 quota.py serve        # http://localhost:8377
 python3 quota.py poll         # 手动抓一次写入 history.jsonl
 ```
 
-- `serve` 模式：看板每 60s 自动刷新，数据过期时才打 API（间隔 60s，空闲时自动降到 5min）
+- 后台调度器持续采样：看板最近被打开过时 60s 一次，否则 5min 一次 — 关 tab 也照攒历史
 - `?refresh=1` 异步触发后台 poll，立即返回当前 state；前端点 Refresh 后 4.5s 自动再拉一次拿新样本
-- 数据落盘：`history.jsonl`,一行一个 snapshot
+- 数据落盘：`history.jsonl`,一行一个 snapshot；失败采样（quota=null）不参与 latest/预测
 - token 从 `~/.local/share/devin/credentials.toml` 读，org 从 `~/.config/devin/config.json` 读
 - launchd 常驻：`com.mark.devin-quota`(RunAtLoad + KeepAlive)，日志 `/tmp/devin-quota-server.log`
 
 ## 看板交互
 
-- **Hover**：十字线 + tooltip，显示时刻 / 实测 usage / forecast / even pace 差值
-- **拖动框选**放大 X 轴区间，**双击**还原全周视图
+- **Hover**：十字线 + tooltip，显示时刻 / 实测 usage / forecast / even pace
+- **拖动框选**或**双指捏合**缩放 X 轴，双指横滚平移，**双击**还原全周
+- **柱状图**：Last 24h 逐小时 + This week 逐日消耗（累计 % 差分）;无样本时段画空心 no-data，不冒充 0
 - 统计卡：剩余额度 / 距 reset / 燃烧速度 / 本小时消耗 / 今日消耗 / overage 余额 — 全部由 `history.jsonl` 实测样本计算，无回填数据
+- header 显示最新样本年龄（freshness)，网络断档时自动跳过失败样本
 
 ## 数据源
 
@@ -43,3 +45,5 @@ python3 quota.py poll         # 手动抓一次写入 history.jsonl
 - **projected_pct_at_reset**: `pct + rate × (reset - now)`。
 - 图上另有 **Even pace** 参考线：窗口内 0%→100% 的匀速对角线。实际线在其上
   = 用超了，其下 = 用得慢；标题行直接显示 `±X% vs even pace`。
+- **Hot pace**（紫虚线）常显：已收集样本窗口的实测斜率外推 — "照最近这股劲
+  烧下去"的场景，与均速主线构成快慢两界。
