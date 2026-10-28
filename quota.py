@@ -89,7 +89,8 @@ def iso_to_ts(s):
 
 def predict(history):
     """Return prediction dict based on weekly_pct history within the current week window."""
-    latest = history[-1] if history else {}
+    ok = [h for h in history if h.get("quota", {}).get("weekly_percentage") is not None]
+    latest = ok[-1] if ok else {}
     q = latest.get("quota", {})
     pct = q.get("weekly_percentage")
     reset_ts = iso_to_ts(q.get("weekly_reset_at", ""))
@@ -141,16 +142,18 @@ def _poll_bg():
 
 def state(force=False):
     hist = load_history()
+    # failed polls (e.g. network not up yet after reboot) have quota=None —
+    # skip them for "latest"/staleness so the page never renders a NaN state
+    ok = [h for h in hist if h.get("quota", {}).get("weekly_percentage") is not None]
     # adaptive: poll fast while % changed within the last hour, slow when flat
-    pcts = [h["quota"]["weekly_percentage"] for h in hist
-            if h.get("quota", {}).get("weekly_percentage") is not None
-            and h["ts"] > time.time() - 3600]
+    pcts = [h["quota"]["weekly_percentage"] for h in ok
+            if h["ts"] > time.time() - 3600]
     interval = POLL_ACTIVE if len(set(pcts)) > 1 else POLL_IDLE
-    stale = not hist or (time.time() - hist[-1]["ts"]) > interval
+    stale = not ok or (time.time() - ok[-1]["ts"]) > interval
     if (force or stale) and _POLL_LOCK.acquire(blocking=False):
         # poll in background so the HTTP response is instant; next fetch picks it up
         threading.Thread(target=_poll_bg, daemon=True).start()
-    return {"latest": hist[-1] if hist else {}, "history": hist, "prediction": predict(hist)}
+    return {"latest": ok[-1] if ok else {}, "history": hist, "prediction": predict(hist)}
 
 
 class Handler(BaseHTTPRequestHandler):
