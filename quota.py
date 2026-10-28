@@ -131,6 +131,7 @@ def predict(history):
 
 
 _POLL_LOCK = threading.Lock()
+_LAST_REQ = 0.0  # last /api/state request time — "someone is watching"
 
 
 def _poll_bg():
@@ -140,11 +141,32 @@ def _poll_bg():
         _POLL_LOCK.release()
 
 
+def _last_ok_ts(hist):
+    return max((h["ts"] for h in hist
+                if h.get("quota", {}).get("weekly_percentage") is not None), default=0)
+
+
+def _scheduler():
+    # keeps history.jsonl growing even when nobody has the page open:
+    # 60s cadence while a dashboard tab fetched recently, else 5min
+    while True:
+        time.sleep(30)
+        try:
+            interval = POLL_ACTIVE if time.time() - _LAST_REQ < 600 else POLL_IDLE
+            if time.time() - _last_ok_ts(load_history()) > interval \
+                    and _POLL_LOCK.acquire(blocking=False):
+                threading.Thread(target=_poll_bg, daemon=True).start()
+        except Exception:
+            pass
+
+
 def state(force=False):
     hist = load_history()
     # failed polls (e.g. network not up yet after reboot) have quota=None —
     # skip them for "latest"/staleness so the page never renders a NaN state
     ok = [h for h in hist if h.get("quota", {}).get("weekly_percentage") is not None]
+    global _LAST_REQ
+    _LAST_REQ = time.time()
     # adaptive: poll fast while % changed within the last hour, slow when flat
     pcts = [h["quota"]["weekly_percentage"] for h in ok
             if h["ts"] > time.time() - 3600]
@@ -185,6 +207,7 @@ class Handler(BaseHTTPRequestHandler):
 
 def serve(port=8377):
     poll(verbose=True)  # seed
+    threading.Thread(target=_scheduler, daemon=True).start()
     srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     print(f"dashboard: http://localhost:{port}  (adaptive poll {POLL_ACTIVE}s active / {POLL_IDLE}s idle)")
     srv.serve_forever()

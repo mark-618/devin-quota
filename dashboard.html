@@ -82,7 +82,7 @@ footer code{background:var(--card2);border-radius:5px;padding:1px 6px;font-size:
   <div class="hdr">
     <div class="t">Devin 额度 <small>· weekly quota burn</small></div>
     <div class="right">
-      <div class="pill"><span class="dot" id="liveDot"></span><span id="liveTxt">Live</span> · <span id="clock">—</span></div>
+      <div class="pill"><span class="dot" id="liveDot"></span><span id="liveTxt">Live</span> · <span id="clock">—</span> · <span id="age" title="age of latest quota sample">—</span></div>
       <div class="pill" onclick="refresh(true);setTimeout(()=>refresh(false),4500)">Refresh</div>
     </div>
   </div>
@@ -364,7 +364,13 @@ function render(){
 }
 
 refresh(false);setInterval(()=>refresh(false),60000);
-setInterval(()=>{$("clock").textContent=new Date().toLocaleTimeString("en-GB")},1000);
+setInterval(()=>{
+  $("clock").textContent=new Date().toLocaleTimeString("en-GB");
+  if(state&&state.latest&&state.latest.ts){
+    const s=Math.round(Date.now()/1000-state.latest.ts);
+    $("age").textContent=s<90?s+"s ago":Math.round(s/60)+"m ago";
+  }
+},1000);
 addEventListener("resize",()=>state&&render());
 
 // chart interaction: hover crosshair + drag-select zoom
