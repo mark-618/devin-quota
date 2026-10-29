@@ -2,7 +2,21 @@
 
 Devin 周额度看板 — opencode 风格的 burn-rate 监控。
 
-## 用法
+## 安装（朋友版）
+
+```bash
+pip install git+ssh://git@github.com/<you>/devin-quota.git
+devin-quota serve           # http://localhost:8377
+```
+
+需要本机已登录 Devin CLI，即存在：
+
+- `~/.local/share/devin/credentials.toml`(token)
+- `~/.config/devin/config.json`(org_id)
+
+数据落盘 `~/.local/share/devin-quota/history.jsonl`（可用 `DEVIN_QUOTA_HOME` 改路径）。
+
+## 用法（repo 内）
 
 ```bash
 python3 quota.py serve        # http://localhost:8377

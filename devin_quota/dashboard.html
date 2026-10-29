@@ -14,10 +14,59 @@
   --faint:#5b5b63;
   --hair:#2e2e33;
   --usage:#3ddc84;
+  --usage2:#23a866;
   --fc:#f5c97b;
   --hot:#c77dff;
   --limit:#6e6e76;
   --blue:#0a84ff;
+  --grid:#2c2c31;
+  --axistext:#6e6e76;
+  --pace:#4e4e58;
+  --nodata:#4a4a52;
+  --hatch:rgba(245,201,123,.28);
+  --nowline:#3a3a41;
+  --toknow:rgba(255,255,255,.12);
+  --selbox:rgba(10,132,255,.10);
+  --endring:#141416;
+  --tick2:#55555f;
+  --usfill0:rgba(61,220,132,.22);
+  --usfill1:rgba(61,220,132,0);
+  --pillhov:#2a2a2f;
+  --tipbg:#2a2a2f;
+  --tipshadow:rgba(0,0,0,.4);
+  --curout:rgba(61,220,132,.45);
+}
+@media (prefers-color-scheme: light){
+:root{
+  --bg:#f5f5f7;
+  --card:#ffffff;
+  --card2:#f2f2f5;
+  --text:#1d1d1f;
+  --sub:#86868e;
+  --faint:#aeaeb4;
+  --hair:#e4e4e9;
+  --usage:#1ca04f;
+  --usage2:#128a47;
+  --fc:#a6730f;
+  --hot:#8b3ed8;
+  --limit:#9a9aa2;
+  --grid:#ececf1;
+  --axistext:#86868e;
+  --pace:#c9c9d1;
+  --nodata:#d6d6de;
+  --hatch:rgba(166,115,15,.18);
+  --nowline:#d8d8e0;
+  --toknow:rgba(0,0,0,.10);
+  --selbox:rgba(10,132,255,.08);
+  --endring:#ffffff;
+  --tick2:#c9c9d1;
+  --usfill0:rgba(28,160,79,.16);
+  --usfill1:rgba(28,160,79,0);
+  --pillhov:#eaeaee;
+  --tipbg:#ffffff;
+  --tipshadow:rgba(0,0,0,.14);
+  --curout:rgba(28,160,79,.45);
+}
 }
 *{margin:0;padding:0;box-sizing:border-box;-webkit-font-smoothing:antialiased}
 html,body{background:var(--bg);color:var(--text);
@@ -30,15 +79,15 @@ html,body{background:var(--bg);color:var(--text);
 .hdr .right{display:flex;gap:8px;align-items:center}
 .pill{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--sub);
   background:var(--card2);border:1px solid var(--hair);border-radius:8px;padding:6px 12px;cursor:pointer}
-.pill:hover{background:#2a2a2f}
+.pill:hover{background:var(--pillhov)}
 .pill .dot{width:6px;height:6px;border-radius:50%;background:var(--usage)}
 .pill .dot.err{background:var(--red,#ff453a)}
 
 .card{background:var(--card);border:1px solid var(--hair);border-radius:14px;padding:22px 24px 16px;position:relative}
 #cv{cursor:crosshair;user-select:none}
-#tip{position:absolute;display:none;pointer-events:none;background:#2a2a2f;border:1px solid var(--hair);
+#tip{position:absolute;display:none;pointer-events:none;background:var(--tipbg);border:1px solid var(--hair);
   border-radius:8px;padding:7px 10px;font-size:11.5px;color:var(--text);white-space:nowrap;z-index:5;
-  box-shadow:0 4px 14px rgba(0,0,0,.4)}
+  box-shadow:0 4px 14px var(--tipshadow)}
 #tip .tt{color:var(--faint);margin-bottom:2px}
 #tip .u{color:var(--usage)}#tip .f{color:var(--fc)}#tip .p{color:var(--sub)}
 
@@ -63,14 +112,14 @@ html,body{background:var(--bg);color:var(--text);
 .legend .sw{display:inline-block;width:16px;height:2px;border-radius:2px;vertical-align:3px;margin-right:7px}
 .legend .sw.dash{background:repeating-linear-gradient(90deg,var(--fc) 0 4px,transparent 4px 7px)}
 .legend .sw.dots{background:repeating-linear-gradient(90deg,var(--limit) 0 3px,transparent 3px 6px)}
-.legend .sw.pace{background:repeating-linear-gradient(90deg,#4e4e58 0 4px,transparent 4px 8px)}
+.legend .sw.pace{background:repeating-linear-gradient(90deg,var(--pace) 0 4px,transparent 4px 8px)}
 
 .bsect{font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;margin:18px 0 8px}
 .bars{display:flex;gap:3px;align-items:flex-end;height:54px}
-.bars .b{flex:1;min-width:0;border-radius:3px 3px 1px 1px;background:linear-gradient(180deg,#3ddc84,#23a866);min-height:2px;cursor:crosshair}
+.bars .b{flex:1;min-width:0;border-radius:3px 3px 1px 1px;background:linear-gradient(180deg,var(--usage),var(--usage2));min-height:2px;cursor:crosshair}
 .bars .b.zero{background:var(--card2)}
 .bars .b.nodata{background:transparent;box-shadow:inset 0 0 0 1px var(--hair)}
-.bars .b.cur{opacity:.75;outline:1px solid rgba(61,220,132,.45)}
+.bars .b.cur{opacity:.75;outline:1px solid var(--curout)}
 .blbls{display:flex;gap:3px;margin-top:5px}
 .blbls span{flex:1;min-width:0;text-align:center;font-size:9.5px;color:var(--faint);white-space:nowrap;overflow:hidden}
 #cv2{width:100%;height:150px;display:block;margin-top:2px;cursor:crosshair}
@@ -160,6 +209,7 @@ async function refresh(force){
 }
 
 function render(){
+  const css=getComputedStyle(document.documentElement),C=n=>css.getPropertyValue(n).trim();
   const q=state.latest.quota||{}, st=state.latest.stats||{}, lim=state.latest.limits||{}, p=state.prediction||{};
   const now=Date.now();
   const pct=q.weekly_percentage??0;
@@ -191,8 +241,8 @@ function render(){
 
   // actual usage: only real polled samples — the gap from reset to the first
   // sample is genuinely unknown, drawn as a faint "no data" segment below
-  const pts=(state.history||[]).filter(h=>h.quota&&h.quota.weekly_percentage!=null&&h.ts*1000>weekStart)
-    .map(h=>({t:h.ts*1000,v:h.quota.weekly_percentage}));
+  const pts=(state.history||[]).filter(h=>h.p!=null&&h.ts*1000>weekStart)
+    .map(h=>({t:h.ts*1000,v:h.p}));
   if(!pts.length) pts.push({t:now,v:pct});
 
   // forecast target
@@ -208,7 +258,7 @@ function render(){
   const Y=v=>H-30-(v/yMax)*(H-50);
 
   // gridlines + y labels
-  ctx.strokeStyle="#2c2c31";ctx.fillStyle="#6e6e76";ctx.lineWidth=1;
+  ctx.strokeStyle=C("--grid");ctx.fillStyle=C("--axistext");ctx.lineWidth=1;
   ctx.font=`${10.5*dpr}px -apple-system`;
   for(const g of [0,50,100,150]){
     if(g>yMax+5)continue;
@@ -218,14 +268,14 @@ function render(){
 
   // even-pace reference diagonal: 0% at week start -> 100% at reset
   // actual line above this = burning faster than uniform pace; below = under
-  ctx.strokeStyle="#4e4e58";ctx.setLineDash([4,5]);ctx.lineWidth=1.4;
+  ctx.strokeStyle=C("--pace");ctx.setLineDash([4,5]);ctx.lineWidth=1.4;
   ctx.beginPath();ctx.moveTo(X(weekStart),Y(0));ctx.lineTo(X(resetT),Y(100));ctx.stroke();
   ctx.setLineDash([]);
 
   // "now" vertical marker
-  ctx.strokeStyle="#3a3a41";ctx.lineWidth=1;
+  ctx.strokeStyle=C("--nowline");ctx.lineWidth=1;
   ctx.beginPath();ctx.moveTo(X(now),Y(0));ctx.lineTo(X(now),14);ctx.stroke();
-  ctx.fillStyle="#8e8e95";ctx.font=`${10*dpr}px -apple-system`;
+  ctx.fillStyle=C("--axistext");ctx.font=`${10*dpr}px -apple-system`;
   ctx.fillText("now",X(now)+5,22);
 
   // hatched forecast region (under forecast line, from last point to min(exhaust,reset))
@@ -236,7 +286,7 @@ function render(){
   if(lp&&hasRate){
     // hatch fill between forecast line and baseline
     const pat=document.createElement("canvas");pat.width=pat.height=8;
-    const pc=pat.getContext("2d");pc.strokeStyle="rgba(245,201,123,.28)";pc.lineWidth=1.4;
+    const pc=pat.getContext("2d");pc.strokeStyle=C("--hatch");pc.lineWidth=1.4;
     pc.beginPath();pc.moveTo(-2,10);pc.lineTo(10,-2);pc.stroke();
     ctx.beginPath();ctx.moveTo(X(lp.t),Y(lp.v));
     const steps=Math.max(2,Math.round((fEnd-lp.t)/(3600e3)));
@@ -248,10 +298,10 @@ function render(){
 
   // "no data" connector: reset (0%) -> first measured sample, faint dotted
   if(pts.length&&pts[0].t>weekStart+60e3){
-    ctx.strokeStyle="#4a4a52";ctx.setLineDash([2,5]);ctx.lineWidth=1.2;
+    ctx.strokeStyle=C("--nodata");ctx.setLineDash([2,5]);ctx.lineWidth=1.2;
     ctx.beginPath();ctx.moveTo(X(weekStart),Y(0));ctx.lineTo(X(pts[0].t),Y(pts[0].v));ctx.stroke();
     ctx.setLineDash([]);
-    ctx.fillStyle="#5b5b63";ctx.font=`${10*dpr}px -apple-system`;
+    ctx.fillStyle=C("--faint");ctx.font=`${10*dpr}px -apple-system`;
     const midT=(weekStart+pts[0].t)/2,midV=pts[0].v/2;
     ctx.fillText("no data — monitoring began "+fmtD(pts[0].t),X(midT)-60*dpr,Y(midV)-8);
   }
@@ -259,13 +309,13 @@ function render(){
   // actual usage area + step line (integer-% quota is a staircase)
   if(pts.length){
     const g=ctx.createLinearGradient(0,0,0,H);
-    g.addColorStop(0,"rgba(61,220,132,.22)");g.addColorStop(1,"rgba(61,220,132,0)");
+    g.addColorStop(0,C("--usfill0"));g.addColorStop(1,C("--usfill1"));
     ctx.beginPath();ctx.moveTo(X(pts[0].t),Y(0));
     let pv=0;
     pts.forEach(pt=>{ctx.lineTo(X(pt.t),Y(pv));ctx.lineTo(X(pt.t),Y(pt.v));pv=pt.v;});
     ctx.lineTo(X(now),Y(0));ctx.closePath();ctx.fillStyle=g;ctx.fill();
 
-    ctx.strokeStyle="#3ddc84";ctx.lineWidth=2;ctx.beginPath();
+    ctx.strokeStyle=C("--usage");ctx.lineWidth=2;ctx.beginPath();
     pv=pts[0].v;ctx.moveTo(X(pts[0].t),Y(pv));
     pts.forEach((pt,i)=>{if(!i)return;ctx.lineTo(X(pt.t),Y(pv));ctx.lineTo(X(pt.t),Y(pt.v));pv=pt.v;});
     ctx.lineTo(X(now),Y(pv));ctx.stroke();
@@ -273,7 +323,7 @@ function render(){
 
   // forecast dashed line
   if(lp&&hasRate){
-    ctx.strokeStyle="#f5c97b";ctx.lineWidth=2;ctx.setLineDash([7,5]);
+    ctx.strokeStyle=C("--fc");ctx.lineWidth=2;ctx.setLineDash([7,5]);
     ctx.beginPath();ctx.moveTo(X(lp.t),Y(lp.v));
     const steps=Math.max(2,Math.round((fEnd-lp.t)/(3600e3)));
     for(let i=1;i<=steps;i++){const t=lp.t+(fEnd-lp.t)*i/steps;
@@ -284,41 +334,41 @@ function render(){
     if(hotR!=null&&hotR>0){
       const hotEnd=p.hot_exhaust_ts&&p.hot_exhaust_ts*1000<resetT?p.hot_exhaust_ts*1000:resetT;
       const hotEndV=clamp(lp.v+hotR/24*(hotEnd-lp.t)/36e5,0,yMax);
-      ctx.strokeStyle="#c77dff";ctx.lineWidth=1.6;ctx.setLineDash([3,4]);
+      ctx.strokeStyle=C("--hot");ctx.lineWidth=1.6;ctx.setLineDash([3,4]);
       ctx.beginPath();ctx.moveTo(X(lp.t),Y(lp.v));
       const hs=Math.max(2,Math.round((hotEnd-lp.t)/(3600e3)));
       for(let i=1;i<=hs;i++){const t=lp.t+(hotEnd-lp.t)*i/hs;
         ctx.lineTo(X(t),Y(clamp(lp.v+hotR/24*(t-lp.t)/36e5,0,yMax)));}
       ctx.stroke();ctx.setLineDash([]);
-      ctx.fillStyle="#c77dff";ctx.beginPath();ctx.arc(X(hotEnd),Y(hotEndV),3,0,7);ctx.fill();
+      ctx.fillStyle=C("--hot");ctx.beginPath();ctx.arc(X(hotEnd),Y(hotEndV),3,0,7);ctx.fill();
       const hl=Math.round(hotEndV)+"%";
       ctx.font=`${10.5*dpr}px -apple-system`;
       ctx.fillText(hl,X(hotEnd)-ctx.measureText(hl).width-6,Y(hotEndV)-8);
     }
     // end marker
-    ctx.fillStyle="#f5c97b";ctx.beginPath();ctx.arc(X(fEnd),Y(fEndV),4,0,7);ctx.fill();
-    ctx.strokeStyle="#141416";ctx.lineWidth=1.6;ctx.stroke();
-    ctx.fillStyle="#f5c97b";ctx.font=`bold ${10.5*dpr}px -apple-system`;
+    ctx.fillStyle=C("--fc");ctx.beginPath();ctx.arc(X(fEnd),Y(fEndV),4,0,7);ctx.fill();
+    ctx.strokeStyle=C("--endring");ctx.lineWidth=1.6;ctx.stroke();
+    ctx.fillStyle=C("--fc");ctx.font=`bold ${10.5*dpr}px -apple-system`;
     const lbl=Math.round(fEndV)+"%";
     ctx.fillText(lbl,X(fEnd)-ctx.measureText(lbl).width-8,Y(fEndV)+4);
   }
   // last-point marker
   if(lp){
-    ctx.fillStyle="#3ddc84";ctx.beginPath();ctx.arc(X(lp.t),Y(lp.v),4,0,7);ctx.fill();
-    ctx.strokeStyle="#141416";ctx.lineWidth=1.6;ctx.stroke();
+    ctx.fillStyle=C("--usage");ctx.beginPath();ctx.arc(X(lp.t),Y(lp.v),4,0,7);ctx.fill();
+    ctx.strokeStyle=C("--endring");ctx.lineWidth=1.6;ctx.stroke();
   }
   // 100% limit line dotted
-  ctx.strokeStyle="#6e6e76";ctx.setLineDash([2,5]);ctx.lineWidth=1.4;
+  ctx.strokeStyle=C("--limit");ctx.setLineDash([2,5]);ctx.lineWidth=1.4;
   ctx.beginPath();ctx.moveTo(18,Y(100));ctx.lineTo(W-18,Y(100));ctx.stroke();ctx.setLineDash([]);
 
   // ---------- hover crosshair + drag-select ----------
   if(dragT0!=null&&dragT1!=null&&dragT1!==dragT0){
-    ctx.fillStyle="rgba(10,132,255,.10)";
+    ctx.fillStyle=C("--selbox");
     const xa=X(Math.min(dragT0,dragT1)),xb2=X(Math.max(dragT0,dragT1));
     ctx.fillRect(xa,0,xb2-xa,H-30);
   }
   if(hoverT!=null&&hoverT>x0&&hoverT<x1){
-    ctx.strokeStyle="#55555f";ctx.lineWidth=1;
+    ctx.strokeStyle=C("--tick2");ctx.lineWidth=1;
     ctx.beginPath();ctx.moveTo(X(hoverT),Y(0));ctx.lineTo(X(hoverT),14);ctx.stroke();
     // step value at hoverT: last sample <= t
     let uv=null;for(const pt of pts){if(pt.t<=hoverT)uv=pt.v;else break;}
@@ -439,16 +489,16 @@ function render(){
   const yMax2=Math.max(1,...series.map(s=>s.total))*1.08;
   const X2=t=>18+(clamp(t,weekStart,resetT)-weekStart)/(resetT-weekStart)*(W2-36);
   const Y2=v=>H2-24-(v/yMax2)*(H2-40);
-  ctx2.strokeStyle="#2c2c31";ctx2.fillStyle="#6e6e76";ctx2.lineWidth=1;
+  ctx2.strokeStyle=C("--grid");ctx2.fillStyle=C("--axistext");ctx2.lineWidth=1;
   ctx2.font=`${10.5*dpr}px -apple-system`;
   for(let i=1;i<=4;i++){const g=yMax2*i/4;
     ctx2.beginPath();ctx2.moveTo(18,Y2(g));ctx2.lineTo(W2-18,Y2(g));ctx2.stroke();
     ctx2.fillText(fmtTok(g),20,Y2(g)-4);}
   // day ticks along bottom
-  ctx2.fillStyle="#55555f";ctx2.font=`${9.5*dpr}px -apple-system`;
+  ctx2.fillStyle=C("--tick2");ctx2.font=`${9.5*dpr}px -apple-system`;
   for(let t=Math.ceil(weekStart/DAY)*DAY;t<resetT;t+=DAY)
     ctx2.fillText(fmtD(t).replace(/^[A-Z][a-z]+ /,""),X2(t)-6,H2-8);
-  ctx2.strokeStyle="rgba(255,255,255,.12)";ctx2.beginPath();
+  ctx2.strokeStyle=C("--toknow");ctx2.beginPath();
   ctx2.moveTo(X2(now),14);ctx2.lineTo(X2(now),H2-24);ctx2.stroke();
   for(const s of series){
     ctx2.strokeStyle=s.color;ctx2.lineWidth=s.g==="__other"?1.2:1.8;
@@ -471,6 +521,7 @@ setInterval(()=>{
   }
 },1000);
 addEventListener("resize",()=>state&&render());
+matchMedia("(prefers-color-scheme: light)").addEventListener("change",()=>state&&render());
 
 // chart interaction: hover crosshair + drag-select zoom
 {
