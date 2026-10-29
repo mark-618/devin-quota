@@ -130,6 +130,34 @@ def predict(history):
     return out
 
 
+SESSDB = Path.home() / ".local/share/devin/cli/sessions.db"
+_tok_cache = {"mtime": 0, "data": {"rows": [], "titles": {}}}
+
+
+def load_tokens():
+    """Per-message input-token sizes (context tokens the model read at that
+    turn) from the local Devin CLI db — measured facts, read-only. Cached by
+    file mtime so /api/state stays cheap."""
+    import sqlite3
+    try:
+        mt = SESSDB.stat().st_mtime
+        if mt == _tok_cache["mtime"]:
+            return _tok_cache["data"]
+        db = sqlite3.connect(f"file:{SESSDB}?mode=ro", uri=True)
+        rows = db.execute(
+            "SELECT session_id, created_at, "
+            "json_extract(metadata,'$.num_tokens_preceding') "
+            "FROM message_nodes WHERE created_at>? "
+            "AND json_extract(metadata,'$.num_tokens_preceding') IS NOT NULL "
+            "ORDER BY created_at", (time.time() - 8 * 86400,)).fetchall()
+        titles = dict(db.execute("SELECT id,title FROM sessions").fetchall())
+        db.close()
+        _tok_cache.update(mtime=mt, data={"rows": rows, "titles": titles})
+    except Exception:
+        pass
+    return _tok_cache["data"]
+
+
 _POLL_LOCK = threading.Lock()
 _LAST_REQ = 0.0  # last /api/state request time — "someone is watching"
 
@@ -175,7 +203,8 @@ def state(force=False):
     if (force or stale) and _POLL_LOCK.acquire(blocking=False):
         # poll in background so the HTTP response is instant; next fetch picks it up
         threading.Thread(target=_poll_bg, daemon=True).start()
-    return {"latest": ok[-1] if ok else {}, "history": hist, "prediction": predict(hist)}
+    return {"latest": ok[-1] if ok else {}, "history": hist,
+            "prediction": predict(hist), "tokens": load_tokens()}
 
 
 class Handler(BaseHTTPRequestHandler):

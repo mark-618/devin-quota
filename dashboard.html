@@ -73,6 +73,10 @@ html,body{background:var(--bg);color:var(--text);
 .bars .b.cur{opacity:.75;outline:1px solid rgba(61,220,132,.45)}
 .blbls{display:flex;gap:3px;margin-top:5px}
 .blbls span{flex:1;min-width:0;text-align:center;font-size:9.5px;color:var(--faint);white-space:nowrap;overflow:hidden}
+#cv2{width:100%;height:150px;display:block;margin-top:2px;cursor:crosshair}
+.tokleg{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:8px;font-size:11px;color:var(--sub)}
+.tokleg span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
+.tokleg .sw{display:inline-block;width:12px;height:2.5px;border-radius:2px;vertical-align:3px;margin-right:6px}
 
 .sub-cards{display:grid;grid-template-columns:repeat(6,1fr);gap:12px;margin-top:14px}
 @media(max-width:760px){.sub-cards{grid-template-columns:repeat(2,1fr)}}
@@ -118,6 +122,9 @@ footer code{background:var(--card2);border-radius:5px;padding:1px 6px;font-size:
     <div class="bars" id="hBars"></div><div class="blbls" id="hLbls"></div>
     <div class="bsect">This week · daily burn</div>
     <div class="bars" id="dBars"></div><div class="blbls" id="dLbls"></div>
+    <div class="bsect">Token burn · cumulative input tokens by session</div>
+    <canvas id="cv2"></canvas>
+    <div class="tokleg" id="tokLeg"></div>
   </div>
 
   <div class="sub-cards">
@@ -139,6 +146,7 @@ const DAY=864e5;
 const fmtD=t=>new Date(t).toLocaleDateString("en-US",{month:"short",day:"numeric"});
 const fmtDT=t=>new Date(t).toLocaleString("en-US",{month:"short",day:"numeric",hour:"2-digit",minute:"2-digit"});
 const fmtDur=ms=>{const d=Math.floor(ms/DAY),h=Math.floor(ms%DAY/36e5);return d?d+"d "+h+"h":Math.floor(ms/36e5)+"h "+Math.floor(ms%36e5/6e4)+"m"};
+const fmtTok=v=>v>=1e9?(v/1e9).toFixed(1)+"B":v>=1e6?(v/1e6).toFixed(1)+"M":v>=1e3?(v/1e3).toFixed(0)+"K":Math.round(v)+"";
 
 let state=null, view=null, hoverT=null, dragT0=null, dragT1=null;
 
@@ -408,6 +416,50 @@ function render(){
   for(let a=d0.getTime();a<resetT;a+=DAY)
     dB.push(bucket(a,a+DAY,fmtD(a).replace("Oct ","").replace("Nov ","")));
   mkBars(dB,$("dBars"),$("dLbls"));
+
+  // ---------- token burn: cumulative input tokens per session ----------
+  const PAL=["#5aa9ff","#f5c97b","#c77dff","#ff6480","#4dd0e1","#9ccc65","#55555f"];
+  const trows=((state.tokens&&state.tokens.rows)||[]).filter(r=>r[1]*1000>weekStart);
+  const cv2=$("cv2"),byS=new Map();
+  for(const r of trows){let a=byS.get(r[0]);if(!a)byS.set(r[0],a=[]);a.push([r[1]*1000,r[2]]);}
+  const sums=[...byS.entries()].map(([s,rs])=>[s,rs.reduce((a,r)=>a+r[1],0)]).sort((a,b)=>b[1]-a[1]);
+  const topSet=new Set(sums.slice(0,6).map(x=>x[0]));
+  const grp=[...topSet,"__other"];
+  const series=grp.map((g,i)=>{
+    const src=g==="__other"?trows.filter(r=>!topSet.has(r[0])).map(r=>[r[1]*1000,r[2]]):byS.get(g);
+    src.sort((a,b)=>a[0]-b[0]);
+    let cum=0;const pts2=[[weekStart,0]];
+    for(const [t,v] of src){if(t<weekStart)continue;pts2.push([t,cum]);cum+=v;pts2.push([t,cum]);}
+    pts2.push([now,cum]);
+    const name=g==="__other"?"others":((state.tokens.titles||{})[g]||g).slice(0,22);
+    return {g,name,pts2,total:cum,color:PAL[i]};
+  });
+  const ctx2=cv2.getContext("2d"),W2=cv2.clientWidth*dpr,H2=cv2.clientHeight*dpr;
+  cv2.width=W2;cv2.height=H2;ctx2.clearRect(0,0,W2,H2);ctx2.lineJoin="round";
+  const yMax2=Math.max(1,...series.map(s=>s.total))*1.08;
+  const X2=t=>18+(clamp(t,weekStart,resetT)-weekStart)/(resetT-weekStart)*(W2-36);
+  const Y2=v=>H2-24-(v/yMax2)*(H2-40);
+  ctx2.strokeStyle="#2c2c31";ctx2.fillStyle="#6e6e76";ctx2.lineWidth=1;
+  ctx2.font=`${10.5*dpr}px -apple-system`;
+  for(let i=1;i<=4;i++){const g=yMax2*i/4;
+    ctx2.beginPath();ctx2.moveTo(18,Y2(g));ctx2.lineTo(W2-18,Y2(g));ctx2.stroke();
+    ctx2.fillText(fmtTok(g),20,Y2(g)-4);}
+  // day ticks along bottom
+  ctx2.fillStyle="#55555f";ctx2.font=`${9.5*dpr}px -apple-system`;
+  for(let t=Math.ceil(weekStart/DAY)*DAY;t<resetT;t+=DAY)
+    ctx2.fillText(fmtD(t).replace(/^[A-Z][a-z]+ /,""),X2(t)-6,H2-8);
+  ctx2.strokeStyle="rgba(255,255,255,.12)";ctx2.beginPath();
+  ctx2.moveTo(X2(now),14);ctx2.lineTo(X2(now),H2-24);ctx2.stroke();
+  for(const s of series){
+    ctx2.strokeStyle=s.color;ctx2.lineWidth=s.g==="__other"?1.2:1.8;
+    ctx2.globalAlpha=s.g==="__other"?.55:.9;
+    ctx2.beginPath();
+    s.pts2.forEach(([t,v],i)=>i?ctx2.lineTo(X2(t),Y2(v)):ctx2.moveTo(X2(t),Y2(v)));
+    ctx2.stroke();ctx2.globalAlpha=1;
+  }
+  cv2._d={series,x0:weekStart,x1:resetT};
+  $("tokLeg").innerHTML=series.map(s=>
+    `<span title="${s.name}"><span class="sw" style="background:${s.color}"></span>${s.name} · ${fmtTok(s.total)}</span>`).join("");
 }
 
 refresh(false);setInterval(()=>refresh(false),60000);
@@ -481,6 +533,24 @@ addEventListener("resize",()=>state&&render());
     $(id).addEventListener("mousemove",bt);
     $(id).addEventListener("mouseleave",()=>{$("tip").style.display="none";});
   }
+  // token chart hover: cumulative per-session values at cursor time
+  const cv2=$("cv2");
+  cv2.addEventListener("mousemove",e=>{
+    const d=cv2._d,tip=$("tip");
+    if(!d)return;
+    const t=d.x0+(e.offsetX-18)/(cv2.clientWidth-36)*(d.x1-d.x0);
+    const val=s=>{let v=0;for(const p of s.pts2){if(p[0]<=t)v=p[1];else break;}return v;};
+    const rows2=d.series.map(s=>({n:s.name,v:val(s),c:s.color})).sort((a,b)=>b.v-a.v);
+    const tot=rows2.reduce((a,r)=>a+r.v,0);
+    tip.innerHTML=`<div class="tt">${fmtDT(t)}</div>`+
+      rows2.slice(0,5).map(r=>`<div class="u" style="color:${r.c}">${r.n} · ${fmtTok(r.v)}</div>`).join("")+
+      `<div class="p">total ${fmtTok(tot)}</div>`;
+    tip.style.display="block";
+    const card=cv2.closest(".card").getBoundingClientRect();
+    tip.style.left=Math.min(e.clientX-card.left+12,card.width-tip.offsetWidth-8)+"px";
+    tip.style.top=(e.clientY-card.top-14-tip.offsetHeight)+"px";
+  });
+  cv2.addEventListener("mouseleave",()=>{$("tip").style.display="none";});
 }
 </script>
 </body>
