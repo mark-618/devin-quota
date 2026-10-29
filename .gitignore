@@ -1,6 +1,6 @@
 __pycache__/
 server.log
-*.png
+/*.png
 history.jsonl
 *.egg-info/
 dist/

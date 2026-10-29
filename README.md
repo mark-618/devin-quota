@@ -1,63 +1,102 @@
 # devin-quota
 
-Devin 周额度看板 — opencode 风格的 burn-rate 监控。
+![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)
+![Python](https://img.shields.io/badge/python-3.9%2B-blue.svg)
+![Dependencies](https://img.shields.io/badge/dependencies-none-brightgreen.svg)
 
-## 安装（朋友版）
+A local, **read-only** weekly-quota dashboard for [Devin](https://devin.ai) —
+OpenCode-style burn chart, pace-vs-forecast bands, hourly/daily burn bars,
+and per-session token burn. Pure stdlib Python, single-file HTML/JS frontend,
+zero dependencies.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/quota-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/quota-light.png">
+  <img alt="devin-quota dashboard" src="docs/quota-dark.png">
+</picture>
+
+The dashboard itself follows your system appearance — light by day, dark by
+night (`prefers-color-scheme`).
+
+## Features
+
+- **Weekly burn chart** — measured usage as a step line built only from real
+  poll samples; periods with no data are drawn as an explicit `no data` gap,
+  never back-filled
+- **Two forecast lines** — `Forecast` (amber) extrapolates the week-to-date
+  average rate; `Hot pace` (purple) extrapolates the measured slope of your
+  collected sample window. Together they bound "steady pace" vs "recent
+  momentum"
+- **Even pace reference** — the 0%→100% diagonal; above it you're burning
+  faster than even, below it slower
+- **Hourly & daily burn bars** — last-24h hourly and this-week daily
+  consumption, differenced from cumulative samples; gaps are shown as
+  no-data, future buckets stay empty
+- **Token burn per session** — cumulative input-context tokens grouped by
+  session, read from the local Devin session DB
+- **Interactive** — hover crosshair + tooltip, drag-select or pinch/trackpad
+  zoom, horizontal pan, double-click reset
+- **Stat cards** — quota left, reset countdown, burn rate, this hour, today,
+  overage balance + ACU/session cap
+- **Freshness indicator** — header shows the age of the last good sample;
+  failed polls are skipped and retried
+- **Background scheduler** — polls every 60 s while the dashboard was
+  recently open, 5 min otherwise; keeps collecting with the tab closed
+
+## Install
 
 ```bash
-pip install git+ssh://git@github.com/<you>/devin-quota.git
-devin-quota serve           # http://localhost:8377
+pip install git+https://github.com/mark-618/devin-quota.git
+devin-quota serve           # → http://localhost:8377
 ```
 
-需要本机已登录 Devin CLI，即存在：
+Requirements: Python 3.9+ and a logged-in Devin CLI, i.e.
 
-- `~/.local/share/devin/credentials.toml`(token)
-- `~/.config/devin/config.json`(org_id)
+- `~/.local/share/devin/credentials.toml` (auth token)
+- `~/.config/devin/config.json` (org id)
 
-数据落盘 `~/.local/share/devin-quota/history.jsonl`（可用 `DEVIN_QUOTA_HOME` 改路径）。
+History lands in `~/.local/share/devin-quota/history.jsonl`
+(override with `DEVIN_QUOTA_HOME`).
 
-## 用法（repo 内）
+### From a checkout
 
 ```bash
-python3 quota.py serve        # http://localhost:8377
-python3 quota.py poll         # 手动抓一次写入 history.jsonl
+python3 quota.py serve      # → http://localhost:8377
+python3 quota.py poll       # one-shot sample → history.jsonl
 ```
 
-- 后台调度器持续采样：看板最近被打开过时 60s 一次，否则 5min 一次 — 关 tab 也照攒历史
-- `?refresh=1` 异步触发后台 poll，立即返回当前 state；前端点 Refresh 后 4.5s 自动再拉一次拿新样本
-- 数据落盘：`history.jsonl`,一行一个 snapshot；失败采样（quota=null）不参与 latest/预测
-- token 从 `~/.local/share/devin/credentials.toml` 读，org 从 `~/.config/devin/config.json` 读
-- launchd 常驻：`com.mark.devin-quota`(RunAtLoad + KeepAlive)，日志 `/tmp/devin-quota-server.log`
+### Keep it running (macOS launchd)
 
-## 看板交互
+Drop a plist at `~/Library/LaunchAgents/` with `RunAtLoad` +
+`KeepAlive`, pointing at `python3 -m devin_quota.server serve` (or
+`quota.py serve`) — one note: set `StandardOutPath`/`StandardErrorPath`
+outside `~/Desktop` (e.g. `/tmp/devin-quota-server.log`), since launchd
+cannot open files under TCC-protected directories.
 
-- **Hover**：十字线 + tooltip，显示时刻 / 实测 usage / forecast / even pace
-- **拖动框选**或**双指捏合**缩放 X 轴，双指横滚平移，**双击**还原全周
-- **柱状图**：Last 24h 逐小时 + This week 逐日消耗（累计 % 差分）;无样本时段画空心 no-data，不冒充 0
-- 统计卡：剩余额度 / 距 reset / 燃烧速度 / 本小时消耗 / 今日消耗 / overage 余额 — 全部由 `history.jsonl` 实测样本计算，无回填数据
-- header 显示最新样本年龄（freshness)，网络断档时自动跳过失败样本
+## How the forecast works
 
-## 数据源
+Same week-to-date convention as OpenCode / ccusage / session-meter tools:
 
-`GET https://api.devin.ai/{org_id}/billing/quota/usage` — 和 Devin webapp
-`app.devin.ai/settings/usage` 页面是同一个接口，只读、无副作用。
+- `weekly_percentage` is cumulative since reset, so
+  `pct / elapsed_hours` is the true average slope of the underlying
+  curve — more reliable than short-window slopes (integer-% granularity
+  makes them pure noise)
+- `projected_pct_at_reset = pct + rate × (reset − now)`
+- `exhaust_at = now + (100 − pct) / rate` — if that lands past reset,
+  you're safe for the week
+- **Hot pace** uses the measured slope across your collected samples:
+  it rises quickly during a burst and flattens while idle — the early
+  warning line
 
-返回 `weekly_percentage` / `daily_percentage` / `weekly_reset_at` /
-`overage_balance` 等字段。另带 `billing/usage/stats`（计费周期 ACU）和
-`billing/usage/limits`（单 session ACU cap)。
+## Data source & privacy
 
-## 预测口径
+`GET https://api.devin.ai/{org_id}/billing/quota/usage` — the same
+read-only endpoint the official `app.devin.ai/settings/usage` page calls,
+using your own local CLI token. No writes, no actions against your
+account; everything is stored locally in `history.jsonl`. Token-burn
+stats are read from `~/.local/share/devin/sessions.db` on your machine —
+nothing leaves localhost.
 
-与 opencode / ccusage / ai-session-meter 相同的 week-to-date 平均速率法：
+## License
 
-- `weekly_percentage` 是自 reset 起的累计值，所以 `pct / elapsed_hours` 就是
-  底层曲线的真实平均斜率 —— 等价于采样斜率在整周窗口上的极限，比用监控
-  开始后的一小段样本更准（整数 % 粒度下短窗斜率全是噪声）。`rate_source`
-  恒为 `week_avg`;`window_rate_per_hour` 保留已收集样本的斜率作参考。
-- **projected exhaustion**: rate 线性外推撞到 100% 的日期；晚于 reset 则本周
-  不会耗尽，显示 "On pace for X% at reset"。
-- **projected_pct_at_reset**: `pct + rate × (reset - now)`。
-- 图上另有 **Even pace** 参考线：窗口内 0%→100% 的匀速对角线。实际线在其上
-  = 用超了，其下 = 用得慢；标题行直接显示 `±X% vs even pace`。
-- **Hot pace**（紫虚线）常显：已收集样本窗口的实测斜率外推 — "照最近这股劲
-  烧下去"的场景，与均速主线构成快慢两界。
+MIT
