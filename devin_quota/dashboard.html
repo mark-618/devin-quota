@@ -493,7 +493,7 @@ function drawSess(trows,cv2,leg,C,dpr,weekStart,resetT,now,scale,fmt){
   const topSet=new Set(sums.slice(0,6).map(x=>x[0]));
   const grp=[...topSet,"__other"];
   const series=grp.map((g,i)=>{
-    const src=g==="__other"?trows.filter(r=>!topSet.has(r[0])).map(r=>[r[1]*1000,r[2]]):byS.get(g);
+    const src=g==="__other"?trows.filter(r=>!topSet.has(r[0])).map(r=>[r[1]*1000,r[2]*scale]):byS.get(g);
     src.sort((a,b)=>a[0]-b[0]);
     let cum=0;const pts2=[[weekStart,0]];
     for(const [t,v] of src){if(t<weekStart)continue;pts2.push([t,cum]);cum+=v;pts2.push([t,cum]);}
