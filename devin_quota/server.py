@@ -136,17 +136,14 @@ def predict(history):
 
 
 SESSDB = Path.home() / ".local/share/devin/cli/sessions.db"
-_tok_cache = {"at": 0.0, "data": {"rows": [], "titles": {}}}
+_tok_cache = {"at": 0.0, "data": {"rows": [], "billed": [], "titles": {}, "models": {}}}
+_TOK_LOCK = threading.Lock()
 
 
-def load_tokens():
-    """Per-message input-token sizes (context tokens the model read at that
-    turn) from the local Devin CLI db — measured facts, read-only. Cached on a
-    TTL (not mtime: the db is written constantly by live sessions) so /api/state
-    stays cheap."""
+def _tok_scan():
+    """Rebuild the token cache — the expensive 1.2GB db scan. Runs in a
+    daemon thread so /api/state never waits on it."""
     import sqlite3
-    if time.time() - _tok_cache["at"] < 60 and _tok_cache["at"]:
-        return _tok_cache["data"]
     try:
         db = sqlite3.connect(f"file:{SESSDB}?mode=ro", uri=True)
         rows = db.execute(
@@ -182,6 +179,16 @@ def load_tokens():
             "models": {k: v[1] for k, v in meta.items()}})
     except Exception:
         pass
+    finally:
+        _TOK_LOCK.release()
+
+
+def load_tokens():
+    """Per-message input-token sizes from the local Devin CLI db (read-only).
+    Always returns the last snapshot instantly; a stale cache triggers a
+    background rescan rather than blocking the request."""
+    if time.time() - _tok_cache["at"] > 120 and _TOK_LOCK.acquire(blocking=False):
+        threading.Thread(target=_tok_scan, daemon=True).start()
     return _tok_cache["data"]
 
 
@@ -270,6 +277,7 @@ class Handler(BaseHTTPRequestHandler):
 def serve(port=8377):
     poll(verbose=True)  # seed
     threading.Thread(target=_scheduler, daemon=True).start()
+    load_tokens()  # warm the token cache in the background
     srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
     print(f"dashboard: http://localhost:{port}  (adaptive poll {POLL_ACTIVE}s active / {POLL_IDLE}s idle)")
     srv.serve_forever()
