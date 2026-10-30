@@ -151,17 +151,31 @@ def load_tokens():
         db = sqlite3.connect(f"file:{SESSDB}?mode=ro", uri=True)
         rows = db.execute(
             "SELECT session_id, created_at, "
-            "json_extract(metadata,'$.num_tokens_preceding') "
+            "json_extract(metadata,'$.num_tokens_preceding'), "
+            "json_extract(chat_message,'$.metadata.generation_model') "
             "FROM message_nodes WHERE created_at>? "
             "AND json_extract(metadata,'$.num_tokens_preceding') IS NOT NULL "
             "ORDER BY created_at", (time.time() - 8 * 86400,)).fetchall()
         meta = {r[0]: (r[1], r[2])
                 for r in db.execute("SELECT id,title,model FROM sessions")}
         db.close()
-        # Quota is billed per token; SWE-2 is free on Desktop/CLI through
-        # 2026-11-30 (SWE-1.x still bills, just discounted).
-        billed = [r for r in rows
-                  if not (meta.get(r[0]) or (None, ""))[1].startswith("swe-2")]
+        # Quota burn estimate: input tokens × rough relative model price,
+        # attributed by each call's generation_model (sessions switch models
+        # mid-flight, so the session-level model is wrong). SWE-2 is free on
+        # Desktop/CLI through 2026-11-30 (SWE-1.x still bills, discounted).
+        # Output tokens aren't recorded locally → attribution estimate.
+        def w(model):
+            model = model or ""
+            for k, f in (("claude-opus", 5.0), ("claude-sonnet", 3.0),
+                         ("claude-haiku", 1.0), ("gpt", 1.5),
+                         ("gemini", 1.5), ("kimi", 0.8)):
+                if model.startswith(k):
+                    return f
+            return 2.0
+        rows = [[r[0], r[1], r[2], r[3] or (meta.get(r[0]) or (None, ""))[1]]
+                for r in rows]
+        billed = [[r[0], r[1], r[2] * w(r[3])] for r in rows
+                  if not r[3].startswith("swe-2")]
         _tok_cache.update(at=time.time(), data={
             "rows": rows, "billed": billed,
             "titles": {k: v[0] for k, v in meta.items()},

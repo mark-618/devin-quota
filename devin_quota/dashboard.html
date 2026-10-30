@@ -123,6 +123,8 @@ html,body{background:var(--bg);color:var(--text);
 .blbls{display:flex;gap:3px;margin-top:5px}
 .blbls span{flex:1;min-width:0;text-align:center;font-size:9.5px;color:var(--faint);white-space:nowrap;overflow:hidden}
 #cv2,#cv3{width:100%;height:150px;display:block;margin-top:2px;cursor:crosshair}
+.qbar{display:flex;height:20px;border-radius:6px;overflow:hidden;margin-top:6px;background:var(--bar0,#2a2a31)}
+.qbar>div{min-width:0;overflow:hidden;white-space:nowrap;font-size:9px;line-height:20px;padding-left:5px;color:rgba(0,0,0,.65);font-weight:600}
 .tokleg{display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:8px;font-size:11px;color:var(--sub)}
 .tokleg span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px}
 .tokleg .sw{display:inline-block;width:12px;height:2.5px;border-radius:2px;vertical-align:3px;margin-right:6px}
@@ -171,8 +173,9 @@ footer code{background:var(--card2);border-radius:5px;padding:1px 6px;font-size:
     <div class="bars" id="hBars"></div><div class="blbls" id="hLbls"></div>
     <div class="bsect">This week · daily burn</div>
     <div class="bars" id="dBars"></div><div class="blbls" id="dLbls"></div>
-    <div class="bsect">Quota burn · billed input tokens by session（SWE-2 免费不计）</div>
+    <div class="bsect">Quota burn · est. % of weekly quota by session（SWE-2 免费不计）</div>
     <canvas id="cv3"></canvas>
+    <div class="qbar" id="qBar"></div>
     <div class="tokleg" id="qLeg"></div>
     <div class="bsect">Token burn · cumulative input tokens by session</div>
     <canvas id="cv2"></canvas>
@@ -473,15 +476,19 @@ function render(){
   // ---------- token/quota burn: cumulative input tokens per session ----------
   const trows=((state.tokens&&state.tokens.rows)||[]).filter(r=>r[1]*1000>weekStart);
   const brows=((state.tokens&&state.tokens.billed)||[]).filter(r=>r[1]*1000>weekStart);
-  drawSess(trows,$("cv2"),$("tokLeg"),C,dpr,weekStart,resetT,now);
-  drawSess(brows,$("cv3"),$("qLeg"),C,dpr,weekStart,resetT,now);
+  drawSess(trows,$("cv2"),$("tokLeg"),C,dpr,weekStart,resetT,now,1,fmtTok);
+  // est. % of weekly quota: distribute observed pct across billed tokens
+  const bTot=brows.reduce((a,r)=>a+r[2],0)||1;
+  const qSeries=drawSess(brows,$("cv3"),$("qLeg"),C,dpr,weekStart,resetT,now,pct/bTot,v=>v.toFixed(1)+"%");
+  $("qBar").innerHTML=qSeries.filter(s=>s.total>0.05).map(s=>
+    `<div style="width:${s.total/pct*100}%;background:${s.color}" title="${s.name} · ${s.total.toFixed(1)}%">${s.total/pct>0.07?s.name.slice(0,10)+" "+s.total.toFixed(0)+"%":""}</div>`).join("");
 }
 
 const PAL=["#5aa9ff","#f5c97b","#c77dff","#ff6480","#4dd0e1","#9ccc65","#55555f"];
-function drawSess(trows,cv2,leg,C,dpr,weekStart,resetT,now){
+function drawSess(trows,cv2,leg,C,dpr,weekStart,resetT,now,scale,fmt){
   const titles=(state.tokens&&state.tokens.titles)||{};
   const byS=new Map();
-  for(const r of trows){let a=byS.get(r[0]);if(!a)byS.set(r[0],a=[]);a.push([r[1]*1000,r[2]]);}
+  for(const r of trows){let a=byS.get(r[0]);if(!a)byS.set(r[0],a=[]);a.push([r[1]*1000,r[2]*scale]);}
   const sums=[...byS.entries()].map(([s,rs])=>[s,rs.reduce((a,r)=>a+r[1],0)]).sort((a,b)=>b[1]-a[1]);
   const topSet=new Set(sums.slice(0,6).map(x=>x[0]));
   const grp=[...topSet,"__other"];
@@ -503,7 +510,7 @@ function drawSess(trows,cv2,leg,C,dpr,weekStart,resetT,now){
   ctx2.font=`${10.5*dpr}px -apple-system`;
   for(let i=1;i<=4;i++){const g=yMax2*i/4;
     ctx2.beginPath();ctx2.moveTo(18,Y2(g));ctx2.lineTo(W2-18,Y2(g));ctx2.stroke();
-    ctx2.fillText(fmtTok(g),20,Y2(g)-4);}
+    ctx2.fillText(fmt(g),20,Y2(g)-4);}
   // day ticks along bottom
   ctx2.fillStyle=C("--tick2");ctx2.font=`${9.5*dpr}px -apple-system`;
   for(let t=Math.ceil(weekStart/DAY)*DAY;t<resetT;t+=DAY)
@@ -517,9 +524,10 @@ function drawSess(trows,cv2,leg,C,dpr,weekStart,resetT,now){
     s.pts2.forEach(([t,v],i)=>i?ctx2.lineTo(X2(t),Y2(v)):ctx2.moveTo(X2(t),Y2(v)));
     ctx2.stroke();ctx2.globalAlpha=1;
   }
-  cv2._d={series,x0:weekStart,x1:resetT};
+  cv2._d={series,x0:weekStart,x1:resetT,fmt};
   leg.innerHTML=series.map(s=>
-    `<span title="${s.name}"><span class="sw" style="background:${s.color}"></span>${s.name} · ${fmtTok(s.total)}</span>`).join("");
+    `<span title="${s.name}"><span class="sw" style="background:${s.color}"></span>${s.name} · ${fmt(s.total)}</span>`).join("");
+  return series;
 }
 
 refresh(false);setInterval(()=>refresh(false),60000);
@@ -604,9 +612,10 @@ matchMedia("(prefers-color-scheme: light)").addEventListener("change",()=>state&
       const val=s=>{let v=0;for(const p of s.pts2){if(p[0]<=t)v=p[1];else break;}return v;};
       const rows2=d.series.map(s=>({n:s.name,v:val(s),c:s.color})).sort((a,b)=>b.v-a.v);
       const tot=rows2.reduce((a,r)=>a+r.v,0);
+      const f=d.fmt||fmtTok;
       tip.innerHTML=`<div class="tt">${fmtDT(t)}</div>`+
-        rows2.slice(0,5).map(r=>`<div class="u" style="color:${r.c}">${r.n} · ${fmtTok(r.v)}</div>`).join("")+
-        `<div class="p">total ${fmtTok(tot)}</div>`;
+        rows2.slice(0,5).map(r=>`<div class="u" style="color:${r.c}">${r.n} · ${f(r.v)}</div>`).join("")+
+        `<div class="p">total ${f(tot)}</div>`;
       tip.style.display="block";
       const card=cv2.closest(".card").getBoundingClientRect();
       tip.style.left=Math.min(e.clientX-card.left+12,card.width-tip.offsetWidth-8)+"px";
