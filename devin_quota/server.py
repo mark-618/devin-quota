@@ -136,18 +136,18 @@ def predict(history):
 
 
 SESSDB = Path.home() / ".local/share/devin/cli/sessions.db"
-_tok_cache = {"mtime": 0, "data": {"rows": [], "titles": {}}}
+_tok_cache = {"at": 0.0, "data": {"rows": [], "titles": {}}}
 
 
 def load_tokens():
     """Per-message input-token sizes (context tokens the model read at that
-    turn) from the local Devin CLI db — measured facts, read-only. Cached by
-    file mtime so /api/state stays cheap."""
+    turn) from the local Devin CLI db — measured facts, read-only. Cached on a
+    TTL (not mtime: the db is written constantly by live sessions) so /api/state
+    stays cheap."""
     import sqlite3
+    if time.time() - _tok_cache["at"] < 60 and _tok_cache["at"]:
+        return _tok_cache["data"]
     try:
-        mt = SESSDB.stat().st_mtime
-        if mt == _tok_cache["mtime"]:
-            return _tok_cache["data"]
         db = sqlite3.connect(f"file:{SESSDB}?mode=ro", uri=True)
         rows = db.execute(
             "SELECT session_id, created_at, "
@@ -155,9 +155,17 @@ def load_tokens():
             "FROM message_nodes WHERE created_at>? "
             "AND json_extract(metadata,'$.num_tokens_preceding') IS NOT NULL "
             "ORDER BY created_at", (time.time() - 8 * 86400,)).fetchall()
-        titles = dict(db.execute("SELECT id,title FROM sessions").fetchall())
+        meta = {r[0]: (r[1], r[2])
+                for r in db.execute("SELECT id,title,model FROM sessions")}
         db.close()
-        _tok_cache.update(mtime=mt, data={"rows": rows, "titles": titles})
+        # Quota is billed per token; SWE-2 is free on Desktop/CLI through
+        # 2026-11-30 (SWE-1.x still bills, just discounted).
+        billed = [r for r in rows
+                  if not (meta.get(r[0]) or (None, ""))[1].startswith("swe-2")]
+        _tok_cache.update(at=time.time(), data={
+            "rows": rows, "billed": billed,
+            "titles": {k: v[0] for k, v in meta.items()},
+            "models": {k: v[1] for k, v in meta.items()}})
     except Exception:
         pass
     return _tok_cache["data"]
