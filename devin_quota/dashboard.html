@@ -408,9 +408,11 @@ function render(){
   if(p.hot_exhaust_ts&&p.hot_exhaust_ts*1000<x1&&p.hot_exhaust_ts*1000>x0)
     marks.push({t:p.hot_exhaust_ts*1000,l:"hot "+fmtDT(p.hot_exhaust_ts*1000),hot:true});
   marks.sort((a,b)=>a.t-b.t);
-  const rows=[[],[]], cw=xb.clientWidth||800;
+  // three lanes: ticks/reset on top, fc hit time mid, hot hit time bottom —
+  // each lane dedupes itself so the two forecast markers never eat each other
+  const rows=[[],[],[]], cw=xb.clientWidth||800;
   marks.forEach(m=>{
-    const r=m.hit||m.hot?1:0, frac=(m.t-x0)/(x1-x0);
+    const r=m.hit?1:m.hot?2:0, frac=(m.t-x0)/(x1-x0);
     if(rows[r].some(f=>Math.abs(f-frac)*cw<56)) return;
     rows[r].push(frac);
     const el=document.createElement("div");
@@ -418,10 +420,10 @@ function render(){
     el.textContent=m.l;
     el.style.position="absolute";
     el.style.left=`calc(${frac*100}% - 30px)`;
-    if(r)el.style.top="25px";
+    if(r)el.style.top=r===1?"25px":"44px";
     xb.appendChild(el);
   });
-  xb.style.height="48px";
+  xb.style.height="66px";
 
   // ---------- footer + minis ----------
   const rate=p.rate_per_day;
