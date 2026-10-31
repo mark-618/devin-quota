@@ -103,6 +103,7 @@ html,body{background:var(--bg);color:var(--text);
 .xbar{display:flex;justify-content:space-between;margin:8px -4px 0;position:relative}
 .xbar .x{font-size:11px;font-weight:600;color:var(--sub);background:var(--card2);border-radius:7px;padding:4px 10px;white-space:nowrap}
 .xbar .x.hit{color:var(--fc)}
+.xbar .x.hot{color:var(--hot)}
 .xbar .x.end{color:var(--faint)}
 
 .foot{display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--hair)}
@@ -226,7 +227,7 @@ function render(){
   // headline: "Weekly usage · Ends Nov 1 · On pace to hit the limit Oct 30"
   let paceHtml;
   if(p.rate_per_day!=null&&p.rate_per_day>0&&p.exhaust_ts&&p.exhaust_ts*1000<resetT){
-    paceHtml=`<b>On pace to hit the limit ${fmtD(p.exhaust_ts*1000)}</b>`;
+    paceHtml=`<b>On pace to hit the limit ${fmtDT(p.exhaust_ts*1000)}</b>`;
   }else if(p.pace_projection_pct!=null&&p.pace_projection_pct>100){
     paceHtml=`<b>On pace for ${Math.round(p.pace_projection_pct)}% — over the limit</b>`;
   }else if(p.projected_pct_at_reset!=null){
@@ -392,7 +393,8 @@ function render(){
     tip.style.top="70px";
   }else{$("tip").style.display="none";}
 
-  // ---------- x labels (adaptive density by visible span) ----------
+  // ---------- x labels (adaptive density; forecasts get exact times,
+  // second row for exhaustion markers, dedupe overlapping labels) ----------
   const xb=$("xbar");xb.innerHTML="";
   const span=x1-x0;
   const step=span>5*DAY?DAY:span>2*DAY?12*36e5:span>DAY?6*36e5:span>6*36e5?2*36e5:36e5;
@@ -400,25 +402,33 @@ function render(){
   for(let t=Math.ceil(x0/step)*step;t<x1;t+=step)
     marks.push({t,l:span>2*DAY?fmtD(t):fmtDT(t).replace(", "," ")});
   marks.unshift({t:x0,l:view?fmtDT(x0):fmtD(x0)});
-  if(exhaustT&&exhaustT<x1&&exhaustT>x0) marks.push({t:exhaustT,l:fmtD(exhaustT),hit:true});
   marks.push({t:x1,l:view?fmtDT(x1):fmtD(x1),end:true});
+  if(exhaustT&&exhaustT<x1&&exhaustT>x0)
+    marks.push({t:exhaustT,l:"fc "+fmtDT(exhaustT),hit:true});
+  if(p.hot_exhaust_ts&&p.hot_exhaust_ts*1000<x1&&p.hot_exhaust_ts*1000>x0)
+    marks.push({t:p.hot_exhaust_ts*1000,l:"hot "+fmtDT(p.hot_exhaust_ts*1000),hot:true});
   marks.sort((a,b)=>a.t-b.t);
+  const rows=[[],[]], cw=xb.clientWidth||800;
   marks.forEach(m=>{
+    const r=m.hit||m.hot?1:0, frac=(m.t-x0)/(x1-x0);
+    if(rows[r].some(f=>Math.abs(f-frac)*cw<56)) return;
+    rows[r].push(frac);
     const el=document.createElement("div");
-    el.className="x"+(m.hit?" hit":m.end?" end":"");
+    el.className="x"+(m.hit?" hit":m.hot?" hot":m.end?" end":"");
     el.textContent=m.l;
-    // position: use flex auto-ish via absolute
-    el.style.position="absolute";el.style.left=`calc(${(m.t-x0)/(x1-x0)*100}% - 28px)`;
+    el.style.position="absolute";
+    el.style.left=`calc(${frac*100}% - 30px)`;
+    if(r)el.style.top="25px";
     xb.appendChild(el);
   });
-  xb.style.height="26px";
+  xb.style.height="48px";
 
   // ---------- footer + minis ----------
   const rate=p.rate_per_day;
   let avgHtml=rate!=null?`Averaging <b>${rate.toFixed(1)}%</b> a day (week-to-date)`:`样本 ${p.samples??0} · 每小时自动记录`;
   if(p.hot_rate_per_day!=null&&p.hot_rate_per_day>0){
     const he=p.hot_exhaust_ts;
-    avgHtml+=` · hot pace ${p.hot_rate_per_day.toFixed(1)}%/day`+(he&&he*1000<resetT?` → hits limit <b style="color:var(--hot)">${fmtD(he*1000)}</b>`:"");
+    avgHtml+=` · hot pace ${p.hot_rate_per_day.toFixed(1)}%/day`+(he&&he*1000<resetT?` → hits limit <b style="color:var(--hot)">${fmtDT(he*1000)}</b>`:"");
   }
   $("avg").innerHTML=avgHtml;
   $("mRemain").innerHTML=`${(100-pct).toFixed(0)}<small>%</small>`;
