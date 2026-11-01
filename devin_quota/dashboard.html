@@ -517,7 +517,7 @@ function drawSess(trows,cv2,leg,C,dpr,weekStart,resetT,now,scale,fmt){
   cv2.width=W2;cv2.height=H2;ctx2.clearRect(0,0,W2,H2);ctx2.lineJoin="round";
   const yMax2=Math.max(1,...series.map(s=>s.total))*1.08;
   const X2=t=>18+(clamp(t,weekStart,resetT)-weekStart)/(resetT-weekStart)*(W2-36);
-  const Y2=v=>H2-24-(v/yMax2)*(H2-40);
+  const Y2=v=>H2-24-(v/yMax2)*(H2-56);
   ctx2.strokeStyle=C("--grid");ctx2.fillStyle=C("--axistext");ctx2.lineWidth=1;
   ctx2.font=`${10.5*dpr}px -apple-system`;
   for(let i=1;i<=4;i++){const g=yMax2*i/4;
@@ -528,7 +528,7 @@ function drawSess(trows,cv2,leg,C,dpr,weekStart,resetT,now,scale,fmt){
   for(let t=Math.ceil(weekStart/DAY)*DAY;t<resetT;t+=DAY)
     ctx2.fillText(fmtD(t).replace(/^[A-Z][a-z]+ /,""),X2(t)-6,H2-8);
   ctx2.strokeStyle=C("--toknow");ctx2.beginPath();
-  ctx2.moveTo(X2(now),14);ctx2.lineTo(X2(now),H2-24);ctx2.stroke();
+  ctx2.moveTo(X2(now),30);ctx2.lineTo(X2(now),H2-24);ctx2.stroke();
   for(const s of series){
     ctx2.strokeStyle=s.color;ctx2.lineWidth=s.g==="__other"?1.2:1.8;
     ctx2.globalAlpha=s.g==="__other"?.55:.9;
